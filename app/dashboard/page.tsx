@@ -1,0 +1,222 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  Package,
+  CreditCard,
+  BarChart,
+  ShoppingCart,
+  ArrowRight,
+  TrendingUp,
+  Shield,
+  UserCheck,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+
+type User = {
+  name?: string;
+  role: "SUPER_ADMIN" | "ADMIN" | "USER";
+};
+
+// Define the service card type
+type ServiceCard = {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  href: string;
+  role: string[];
+  badge?: string;
+};
+
+export default function DashboardPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      setUser(JSON.parse(stored));
+    }
+  }, []);
+
+  // Define all service cards
+  const allServiceCards: ServiceCard[] = [
+    // {
+    //   title: "Dashboard Overview",
+    //   description: "View key metrics and performance indicators",
+    //   icon: <LayoutDashboard className="h-8 w-8" />,
+    //   href: "/dashboard",
+    //   role: ["SUPER_ADMIN", "ADMIN", "USER"],
+    //   badge: "Essential",
+    // },
+    {
+      title: "Billing & Invoices",
+      description: "Create, view and manage invoices",
+      icon: <FileText className="h-8 w-8" />,
+      href: "/super-admin/invoices",
+      role: ["SUPER_ADMIN", "ADMIN", "USER"],
+      badge: "All Access",
+    },
+    {
+      title: "User Management",
+      description: "Manage system users, roles and permissions",
+      icon: <Users className="h-8 w-8" />,
+      href: "/super-admin/users",
+      role: ["SUPER_ADMIN"],
+      badge: "Admin Only",
+    },
+    {
+      title: "Inventory",
+      description: "Track and manage product inventory",
+      icon: <Package className="h-8 w-8" />,
+      href: "/inventory",
+      role: ["SUPER_ADMIN", "ADMIN"],
+      badge: "Management",
+    },
+    {
+      title: "Expense Tracking",
+      description: "Monitor and categorize expenses",
+      icon: <CreditCard className="h-8 w-8" />,
+      href: "/super-admin/expenses",
+      role: ["SUPER_ADMIN"],
+      badge: "Financial",
+    },
+    {
+      title: "Reseller Analytics",
+      description: "Analyze reseller performance and metrics",
+      icon: <BarChart className="h-8 w-8" />,
+      href: "/super-admin/resellers",
+      role: ["SUPER_ADMIN"],
+      badge: "Analytics",
+    },
+    {
+      title: "Products",
+      description: "Browse and manage available products",
+      icon: <ShoppingCart className="h-8 w-8" />,
+      href: "/products",
+      role: ["USER"],
+      badge: "Shopping",
+    },
+    {
+      title: "Reports",
+      description: "Generate and view detailed reports",
+      icon: <TrendingUp className="h-8 w-8" />,
+      href: "/admin/reports",
+      role: ["SUPER_ADMIN", "ADMIN"],
+      badge: "Analytics",
+    },
+    // {
+    //   title: "Security Settings",
+    //   description: "Configure system security parameters",
+    //   icon: <Shield className="h-8 w-8" />,
+    //   href: "/super-admin/security",
+    //   role: ["SUPER_ADMIN"],
+    //   badge: "Admin Only",
+    // },
+    {
+      title: "Profile Management",
+      description: "Update your personal information and preferences",
+      icon: <UserCheck className="h-8 w-8" />,
+      href: "/profile",
+      role: ["SUPER_ADMIN", "ADMIN", "USER"],
+      badge: "Personal",
+    },
+  ];
+
+  // Filter cards based on user role
+  const filteredCards = user
+    ? allServiceCards.filter((card) => card.role.includes(user.role))
+    : [];
+
+  const handleCardClick = (href: string) => {
+    router.push(href);
+  };
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-600">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">
+            Welcome {user.name ? user.name : user.role.replace("_", " ")}
+          </h2>
+          <p className="mt-2 text-gray-600">
+            {user.role === "SUPER_ADMIN" &&
+              "You have full access to all system modules and administrative functions."}
+            {user.role === "ADMIN" &&
+              "You can manage inventory, invoices, and generate reports."}
+            {user.role === "USER" &&
+              "You can track products, view invoices, and manage your profile."}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredCards.map((card, index) => (
+            <Card
+              key={index}
+              className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-300"
+              onClick={() => handleCardClick(card.href)}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="flex items-center space-x-2">
+                  <div className="p-2 rounded-md bg-blue-100 text-blue-600">
+                    {card.icon}
+                  </div>
+                  <CardTitle className="text-lg">{card.title}</CardTitle>
+                </div>
+                {card.badge && (
+                  <Badge variant="outline" className="ml-2">
+                    {card.badge}
+                  </Badge>
+                )}
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-sm mb-4">
+                  {card.description}
+                </CardDescription>
+                <Button
+                  variant="ghost"
+                  className="p-0 h-auto text-blue-600 hover:text-blue-800"
+                >
+                  Access service <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {filteredCards.length === 0 && (
+          <div className="text-center py-12">
+            <div className="mx-auto w-24 h-24 flex items-center justify-center rounded-full bg-gray-100">
+              <LayoutDashboard className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="mt-4 text-lg font-medium">No services available</h3>
+            <p className="mt-2 text-gray-500">
+              There are no services configured for your role at this time.
+            </p>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}
