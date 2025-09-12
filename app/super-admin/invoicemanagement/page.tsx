@@ -4,6 +4,44 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { Eye, Pencil, Trash2, Search, FileText, Plus } from "lucide-react";
+import { toast } from "sonner";
+
+// Import shadcn components
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Define types based on your Prisma schema
 type InvoiceWithRelations = Prisma.InvoiceGetPayload<{
@@ -20,7 +58,15 @@ const InvoiceManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [selectedInvoice, setSelectedInvoice] =
+    useState<InvoiceWithRelations | null>(null);
+  const [mode, setMode] = useState<"view" | "edit" | null>(null);
+
   const router = useRouter();
+
+  // Theme colors
+  const themeColor = "#954C2E";
+  const themeLight = "#F5E9E4";
 
   // Fetch invoices from API
   const fetchInvoices = async () => {
@@ -50,6 +96,9 @@ const InvoiceManagement = () => {
       console.error("Error fetching invoices:", error);
       // Set empty array instead of showing error for better UX
       setInvoices([]);
+      toast.error("Failed to fetch invoices", {
+        description: "Please try again later.",
+      });
     } finally {
       setLoading(false);
     }
@@ -70,14 +119,21 @@ const InvoiceManagement = () => {
         // Remove the deleted invoice from state
         setInvoices(invoices.filter((invoice) => invoice.id !== id));
         setDeleteConfirm(null);
+        toast.success("Invoice deleted successfully", {
+          description: "The invoice has been permanently removed.",
+        });
       } else {
         const data = await response.json();
         console.error("Error deleting invoice:", data.error);
-        alert("Failed to delete invoice");
+        toast.error("Failed to delete invoice", {
+          description: data.error || "Please try again.",
+        });
       }
     } catch (error) {
       console.error("Error deleting invoice:", error);
-      alert("Failed to delete invoice");
+      toast.error("Failed to delete invoice", {
+        description: "An unexpected error occurred.",
+      });
     }
   };
 
@@ -100,19 +156,21 @@ const InvoiceManagement = () => {
     }).format(amount);
   };
 
-  // Get status badge class
-  const getStatusClass = (status: string) => {
+  // Get status badge variant (restricted to allowed Badge variants)
+  const getStatusVariant = (
+    status: string
+  ): "default" | "secondary" | "destructive" | "outline" | undefined => {
     switch (status) {
       case "PAID":
-        return "bg-green-100 text-green-800";
+        return "default";
       case "PENDING":
-        return "bg-yellow-100 text-yellow-800";
+        return "outline";
       case "DRAFT":
-        return "bg-gray-100 text-gray-800";
+        return "secondary";
       case "OVERDUE":
-        return "bg-red-100 text-red-800";
+        return "destructive";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "secondary";
     }
   };
 
@@ -120,195 +178,144 @@ const InvoiceManagement = () => {
     <DashboardLayout>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
             Invoice Management
           </h1>
           <p className="text-gray-600">View and manage all your invoices</p>
         </div>
 
         {/* Search and Filter Section */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Search Invoices
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <label
+                  htmlFor="search"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Search Invoices
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                  <Input
+                    id="search"
+                    type="text"
+                    placeholder="Search by invoice number or customer name..."
+                    className="pl-8"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
-                <input
-                  type="text"
-                  id="search"
-                  placeholder="Search by invoice number or customer name..."
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              </div>
+
+              <div className="w-full md:w-48">
+                <label
+                  htmlFor="status"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Filter by Status
+                </label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter status" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="ALL">All Statuses</SelectItem>
+                    <SelectItem value="DRAFT">Draft</SelectItem>
+                    <SelectItem value="FINAL">Final</SelectItem>
+                    <SelectItem value="PAID">Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end">
+                <Button
+                  onClick={() => router.push("/super-admin/invoices")}
+                  style={{ backgroundColor: themeColor }}
+                  className="hover:opacity-90 text-white"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create New Invoice
+                </Button>
               </div>
             </div>
-
-            <div className="w-full md:w-48">
-              <label
-                htmlFor="status"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Filter by Status
-              </label>
-              <select
-                id="status"
-                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="DRAFT">Draft</option>
-                <option value="PENDING">Pending</option>
-                <option value="PAID">Paid</option>
-                <option value="OVERDUE">Overdue</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={() => router.push("/super-admin/invoices")}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Create New Invoice
-              </button>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Invoices Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading invoices...</p>
-            </div>
-          ) : invoices.length === 0 ? (
-            <div className="p-8 text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
-                No invoices
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {searchTerm || statusFilter !== "ALL"
-                  ? "Try changing your search or filter criteria"
-                  : "Get started by creating a new invoice."}
-              </p>
-              <div className="mt-6">
-                <button
-                  onClick={() => router.push("/super-admin/invoices/create")}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Create New Invoice
-                </button>
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoices</CardTitle>
+            <CardDescription>
+              {invoices.length} invoice{invoices.length !== 1 ? "s" : ""} found
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center space-x-4">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-[250px]" />
+                      <Skeleton className="h-4 w-[200px]" />
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Invoice #
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Customer
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Date
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Due Date
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Amount
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Status
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+            ) : invoices.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-4 text-lg font-semibold text-gray-900">
+                  No invoices
+                </h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  {searchTerm || statusFilter !== "ALL"
+                    ? "Try changing your search or filter criteria"
+                    : "Get started by creating a new invoice."}
+                </p>
+                <div className="mt-6">
+                  <Button
+                    onClick={() => router.push("/super-admin/invoices/create")}
+                    style={{ backgroundColor: themeColor }}
+                    className="hover:opacity-90"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create New Invoice
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {invoices.map((invoice) => (
-                    <tr key={invoice.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {invoice.invoiceNumber}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                    <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">
+                        {invoice.invoiceNumber}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">
                           {invoice.customer.name}
                         </div>
                         <div className="text-sm text-gray-500">
                           {invoice.customer.number}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatDate(invoice.invoiceDate)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatDate(invoice.dueDate)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                      </TableCell>
+                      <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
+                      <TableCell>{formatDate(invoice.dueDate)}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">
                           {formatCurrency(invoice.total)}
                         </div>
                         {invoice.advancePaid > 0 && (
@@ -316,127 +323,321 @@ const InvoiceManagement = () => {
                             Advance: {formatCurrency(invoice.advancePaid)}
                           </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(
-                            invoice.status
-                          )}`}
-                        >
-                          {invoice.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() =>
-                              router.push(
-                                `/super-admin/invoices/view/${invoice.id}`
-                              )
-                            }
-                            className="text-blue-600 hover:text-blue-900"
+                      </TableCell>
+                      <TableCell>
+                        {invoice.status === "PAID" ? (
+                          <Badge className="bg-green-600 text-white hover:bg-green-700">
+                            {invoice.status}
+                          </Badge>
+                        ) : (
+                          <Badge variant={getStatusVariant(invoice.status)}>
+                            {invoice.status}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedInvoice(invoice);
+                              setMode("view");
+                            }}
                             title="View Invoice"
                           >
-                            <svg
-                              className="h-5 w-5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                              />
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() =>
-                              router.push(
-                                `/super-admin/invoices/edit/${invoice.id}`
-                              )
-                            }
-                            className="text-indigo-600 hover:text-indigo-900"
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedInvoice(invoice);
+                              setMode("edit");
+                            }}
                             title="Edit Invoice"
                           >
-                            <svg
-                              className="h-5 w-5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              />
-                            </svg>
-                          </button>
-                          <button
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
                             onClick={() => setDeleteConfirm(invoice.id)}
-                            className="text-red-600 hover:text-red-900"
                             title="Delete Invoice"
                           >
-                            <svg
-                              className="h-5 w-5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Delete Confirmation Modal */}
-        {deleteConfirm && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Confirm Deletion
-              </h3>
-              <p className="text-sm text-gray-500 mb-6">
+        {/* View Dialog */}
+        <Dialog open={mode === "view"} onOpenChange={() => setMode(null)}>
+          <DialogContent className="w-7xl bg-white">
+            <DialogHeader>
+              <DialogTitle>Invoice Details</DialogTitle>
+              <DialogDescription>
+                View details for invoice #{selectedInvoice?.invoiceNumber}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedInvoice && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-1">Invoice #</h4>
+                    <p>{selectedInvoice.invoiceNumber}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-1">Status</h4>
+                    {selectedInvoice.status === "PAID" ? (
+                      <Badge className="bg-green-600 text-white hover:bg-green-700">
+                        {selectedInvoice.status}
+                      </Badge>
+                    ) : (
+                      <Badge variant={getStatusVariant(selectedInvoice.status)}>
+                        {selectedInvoice.status}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-1">Date</h4>
+                    <p>{formatDate(selectedInvoice.invoiceDate)}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-1">Due Date</h4>
+                    <p>{formatDate(selectedInvoice.dueDate)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-1">Customer</h4>
+                  <p>{selectedInvoice.customer.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {selectedInvoice.customer.number}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-1">Amount</h4>
+                  <p>{formatCurrency(selectedInvoice.total)}</p>
+                  {selectedInvoice.advancePaid > 0 && (
+                    <p className="text-sm text-gray-500">
+                      Advance: {formatCurrency(selectedInvoice.advancePaid)}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-2 wrap-anywhere">Items</h4>
+                  <div className="border rounded-md">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Quantity</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedInvoice.items.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium break-words whitespace-normal max-w-[250px]">
+                              {item.name}
+                            </TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(item.price)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(item.quantity * item.price)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={mode === "edit"} onOpenChange={() => setMode(null)}>
+          <DialogContent className="max-w-2xl bg-white">
+            <DialogHeader>
+              <DialogTitle>Edit Invoice</DialogTitle>
+              <DialogDescription>
+                Make changes to invoice #{selectedInvoice?.invoiceNumber}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedInvoice && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  const body = {
+                    customer: {
+                      name: formData.get("customerName"),
+                      number: formData.get("customerNumber"),
+                    },
+                    remaining: Number(formData.get("remaining")),
+                  };
+
+                  const updatePromise = fetch(
+                    `/api/allinvoices/updateinvoice?id=${selectedInvoice.id}`,
+                    {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(body),
+                    }
+                  );
+
+                  toast.promise(updatePromise, {
+                    loading: "Updating invoice...",
+                    success: async (res) => {
+                      if (res.ok) {
+                        await fetchInvoices();
+                        setSelectedInvoice(null);
+                        setMode(null);
+                        return "Invoice updated successfully";
+                      } else {
+                        throw new Error("Failed to update invoice");
+                      }
+                    },
+                    error: (error) => {
+                      return error.message || "Failed to update invoice";
+                    },
+                  });
+                }}
+                className="grid gap-4 py-4"
+              >
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="customerName"
+                      className="text-sm font-medium"
+                    >
+                      Customer Name
+                    </label>
+                    <Input
+                      id="customerName"
+                      name="customerName"
+                      defaultValue={selectedInvoice.customer.name}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="customerNumber"
+                      className="text-sm font-medium"
+                    >
+                      Customer Number
+                    </label>
+                    <Input
+                      id="customerNumber"
+                      name="customerNumber"
+                      defaultValue={selectedInvoice.customer.number}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="remaining" className="text-sm font-medium">
+                    Remaining Amount
+                  </label>
+                  <Input
+                    id="remaining"
+                    name="remaining"
+                    type="number"
+                    defaultValue={
+                      selectedInvoice.total - selectedInvoice.advancePaid
+                    }
+                  />
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const markAsPaidPromise = fetch(
+                        `/api/allinvoices/${selectedInvoice.id}`,
+                        {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            remaining: 0,
+                            status: "PAID",
+                          }),
+                        }
+                      );
+
+                      toast.promise(markAsPaidPromise, {
+                        loading: "Marking as paid...",
+                        success: async (res) => {
+                          if (res.ok) {
+                            await fetchInvoices();
+                            setSelectedInvoice(null);
+                            setMode(null);
+                            return "Invoice marked as paid successfully";
+                          } else {
+                            throw new Error("Failed to mark as paid");
+                          }
+                        },
+                        error: (error) => {
+                          return error.message || "Failed to mark as paid";
+                        },
+                      });
+                    }}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Mark as Paid
+                  </Button>
+                  <Button type="submit">Save Changes</Button>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          open={!!deleteConfirm}
+          onOpenChange={() => setDeleteConfirm(null)}
+        >
+          <DialogContent className="max-w-sm bg-white">
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
                 Are you sure you want to delete this invoice? This action cannot
                 be undone.
-              </p>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDelete(deleteConfirm)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

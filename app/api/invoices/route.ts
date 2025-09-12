@@ -129,3 +129,75 @@ export async function GET() {
     );
   }
 }
+
+// ✅ Delete Invoice
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: "Invoice ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // First delete items related to the invoice
+    await prisma.invoiceItem.deleteMany({
+      where: { invoiceId: Number(id) },
+    });
+
+    // Then delete the invoice itself
+    await prisma.invoice.delete({
+      where: { id: Number(id) },
+    });
+
+    return NextResponse.json({ success: true, message: "Invoice deleted" });
+  } catch (error: any) {
+    console.error("❌ Error deleting invoice:", error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// ✅ Update Invoice (customer, number, remaining, status)
+export async function PUT(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invoice ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const body = await req.json();
+    const { customer, remaining, status } = body;
+
+    const updatedInvoice = await prisma.invoice.update({
+      where: { id: Number(id) },
+      data: {
+        balanceDue: remaining,
+        status,
+        customer: customer
+          ? {
+              update: {
+                name: customer.name,
+                number: customer.number,
+              },
+            }
+          : undefined,
+      },
+      include: { customer: true },
+    });
+
+    return NextResponse.json(updatedInvoice);
+  } catch (error: any) {
+    console.error("❌ Error updating invoice:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

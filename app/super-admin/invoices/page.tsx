@@ -99,7 +99,7 @@ const Invoices = () => {
   const [generatePdf, setGeneratePdf] = useState(false);
 
   // Save Invoice to API
-  const saveInvoice = async (status: "DRAFT" | "FINAL") => {
+  const saveInvoice = async (status: "DRAFT" | "FINAL" | "PAID") => {
     try {
       const invoiceData = {
         invoiceNumber,
@@ -146,11 +146,13 @@ const Invoices = () => {
             label: "View Invoices",
             onClick: () => {
               // Navigate to invoices list
-              window.location.href = "/dashboard/invoices";
+              window.location.href = "/super-admin/invoicemanagement";
             },
           },
         }
       );
+
+      return result;
     } catch (error: any) {
       console.error("❌ Error saving invoice:", error);
 
@@ -166,6 +168,7 @@ const Invoices = () => {
           },
         }
       );
+      throw error;
     }
   };
 
@@ -237,6 +240,11 @@ const Invoices = () => {
   const total = subtotal + gstTotal;
   const advanceAmount = total - advancePayment;
   const balance = total - advanceAmount;
+
+  // Determine invoice status based on advance payment
+  const getInvoiceStatus = (): "DRAFT" | "PAID" => {
+    return advancePayment > 0 ? "DRAFT" : "PAID";
+  };
 
   // Handle customer info change
   const handleCustomerInfoChange = (
@@ -320,14 +328,108 @@ const Invoices = () => {
     email: "rudraarts30@gmail.com",
   };
 
+  // Handle final invoice generation
+  const handleGenerateInvoice = async () => {
+    try {
+      const status = getInvoiceStatus();
+      await saveInvoice(status);
+
+      const blob = await pdf(
+        <InvoicePDF
+          invoiceData={{
+            companyDetails,
+            invoiceNumber,
+            invoiceDate,
+            dueDate: invoiceDate,
+            customerInfo: {
+              name: customerInfo.name || "",
+              address: customerInfo.address || "",
+              city: customerInfo.city || "",
+              pincode: customerInfo.pincode || "",
+              gstin: customerInfo.gstin || "",
+            },
+            shippingInfo: shippingInfo.address
+              ? {
+                  name: customerInfo.name,
+                  address: customerInfo.address,
+                  city: customerInfo.city ?? "",
+                  pincode: customerInfo.pincode ?? "",
+                  gstin: customerInfo.gstin ?? "",
+                }
+              : {
+                  name: customerInfo.name || "",
+                  address: customerInfo.address || "",
+                  city: customerInfo.city || "",
+                  pincode: customerInfo.pincode || "",
+                  gstin: customerInfo.gstin || "",
+                },
+            items: items.map((item) => ({
+              name: item.name,
+              hsn: "970300",
+              quantity: item.quantity,
+              unit: "pcs",
+              rate: item.price,
+              cgst: 6,
+              sgst: 6,
+              amount: item.total,
+              discount: item.discount ?? 0,
+            })),
+            subtotal,
+            cgst,
+            sgst,
+            total,
+            totalInWords: `${convertToWords(total)} Only`,
+            deliveryDate: new Date().toLocaleDateString("en-IN", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }),
+            advancePaid: advancePayment,
+            notes: "",
+            previousDue: 0,
+          }}
+          logoUrl="/images/logo.png"
+        />
+      ).toBlob();
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${invoiceNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Show status-specific message
+      if (status === "DRAFT") {
+        alert.info(
+          "Invoice saved as DRAFT",
+          "Advance payment received. Invoice marked as DRAFT until full payment.",
+          {
+            duration: 8000,
+          }
+        );
+      } else {
+        alert.success(
+          "Invoice marked as PAID",
+          "Full payment received. Invoice is now complete.",
+          {
+            duration: 6000,
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Failed to generate invoice:", error);
+    }
+  };
+
   return (
     <DashboardLayout>
       <AlertToaster />
       <div className="container mx-auto p-4 space-y-6 font-open-sans">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-semibold flex items-center text-[#954C2E] font-open-sans">
-            <ReceiptIndianRupee className="mr-2 h-8 w-8" />{" "}
-            {/* Increased size */}
+            <ReceiptIndianRupee className="mr-2 h-8 w-8" />
             Create Invoice
           </h1>
           <div className="flex space-x-2">
@@ -341,81 +443,41 @@ const Invoices = () => {
             </Button>
             <Button
               className="flex-1 bg-[#954C2E] hover:bg-[#734d26] text-white font-open-sans"
-              onClick={async () => {
-                await saveInvoice("FINAL");
-
-                const blob = await pdf(
-                  <InvoicePDF
-                    invoiceData={{
-                      companyDetails,
-                      invoiceNumber,
-                      invoiceDate,
-                      dueDate: invoiceDate,
-                      customerInfo: {
-                        name: customerInfo.name || "",
-                        address: customerInfo.address || "",
-                        city: customerInfo.city || "",
-                        pincode: customerInfo.pincode || "",
-                        gstin: customerInfo.gstin || "",
-                      },
-                      shippingInfo: shippingInfo.address
-                        ? {
-                            name: customerInfo.name,
-                            address: customerInfo.address,
-                            city: customerInfo.city ?? "",
-                            pincode: customerInfo.pincode ?? "",
-                            gstin: customerInfo.gstin ?? "",
-                          }
-                        : {
-                            name: customerInfo.name || "",
-                            address: customerInfo.address || "",
-                            city: customerInfo.city || "",
-                            pincode: customerInfo.pincode || "",
-                            gstin: customerInfo.gstin || "",
-                          },
-                      items: items.map((item) => ({
-                        name: item.name,
-                        hsn: "970300",
-                        quantity: item.quantity,
-                        unit: "pcs",
-                        rate: item.price,
-                        cgst: 6,
-                        sgst: 6,
-                        amount: item.total,
-                        discount: item.discount ?? 0,
-                      })),
-                      subtotal,
-                      cgst,
-                      sgst,
-                      total,
-                      totalInWords: `${convertToWords(total)} Only`,
-                      deliveryDate: new Date().toLocaleDateString("en-IN", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      }),
-                      advancePaid: advancePayment,
-                      notes: "",
-                      previousDue: 0,
-                    }}
-                    logoUrl="/images/logo.png"
-                  />
-                ).toBlob();
-
-                // Trigger download
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `invoice-${invoiceNumber}.pdf`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
+              onClick={handleGenerateInvoice}
             >
               <IndianRupee className="mr-2 h-4 w-4" />
               Generate Invoice
             </Button>
           </div>
         </div>
+
+        {/* Status Indicator */}
+        {items.length > 0 && (
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-blue-800">
+                  Invoice Status: {getInvoiceStatus()}
+                </h3>
+                <p className="text-sm text-blue-600">
+                  {advancePayment > 0
+                    ? "Advance payment received. Invoice will be marked as DRAFT."
+                    : "Full payment received. Invoice will be marked as PAID."}
+                </p>
+              </div>
+              <Badge
+                variant={advancePayment > 0 ? "secondary" : "default"}
+                className={
+                  advancePayment > 0
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-green-100 text-green-800"
+                }
+              >
+                {advancePayment > 0 ? "DRAFT" : "PAID"}
+              </Badge>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Form */}
@@ -551,7 +613,7 @@ const Invoices = () => {
                             key={product.id}
                             onClick={() => {
                               setSelectedProduct(product);
-                              setSearchQuery(product.name);
+                              setSearchQuery(""); // 👈 closes dropdown after select
                             }}
                             className="px-4 py-2 cursor-pointer hover:bg-blue-50 flex justify-between"
                           >
@@ -613,7 +675,6 @@ const Invoices = () => {
                     }
                     handleAddItem();
                   }}
-                  // disabled={!selectedProduct}
                   className="w-full bg-[#954C2E] hover:bg-[#996600] text-white font-open-sans"
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -916,6 +977,14 @@ const Invoices = () => {
                             ₹{advanceAmount.toFixed(2)}
                           </span>
                         </div>
+                        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                          <p className="text-xs text-amber-700">
+                            ⓘ Invoice will be marked as <strong>DRAFT</strong>
+                            since advance payment is received. Status will
+                            change to <strong>PAID</strong> when full payment is
+                            made.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -940,74 +1009,7 @@ const Invoices = () => {
               </Button>
               <Button
                 className="flex-1 bg-[#954C2E] hover:bg-[#734d26] text-white font-open-sans"
-                onClick={async () => {
-                  await saveInvoice("FINAL");
-                  const blob = await pdf(
-                    <InvoicePDF
-                      invoiceData={{
-                        companyDetails,
-                        invoiceNumber,
-                        invoiceDate,
-                        dueDate: invoiceDate,
-                        customerInfo: {
-                          name: customerInfo.name || "",
-                          address: customerInfo.address || "",
-                          city: customerInfo.city || "",
-                          pincode: customerInfo.pincode || "",
-                          gstin: customerInfo.gstin || "",
-                        },
-                        shippingInfo: shippingInfo.address
-                          ? {
-                              name: customerInfo.name,
-                              address: customerInfo.address,
-                              city: customerInfo.city ?? "",
-                              pincode: customerInfo.pincode ?? "",
-                              gstin: customerInfo.gstin ?? "",
-                            }
-                          : {
-                              name: customerInfo.name || "",
-                              address: customerInfo.address || "",
-                              city: customerInfo.city || "",
-                              pincode: customerInfo.pincode || "",
-                              gstin: customerInfo.gstin || "",
-                            },
-                        items: items.map((item) => ({
-                          name: item.name,
-                          hsn: "970300",
-                          quantity: item.quantity,
-                          unit: "pcs",
-                          rate: item.price,
-                          cgst: 6,
-                          sgst: 6,
-                          amount: item.total,
-                          discount: item.discount ?? 0,
-                        })),
-                        subtotal,
-                        cgst,
-                        sgst,
-                        total,
-                        totalInWords: `${convertToWords(total)} Only`,
-                        deliveryDate: new Date().toLocaleDateString("en-IN", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        }),
-                        advancePaid: advancePayment,
-                        notes: "",
-                        previousDue: 0,
-                      }}
-                      logoUrl="/images/logo.png"
-                    />
-                  ).toBlob();
-
-                  // Trigger download
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `invoice-${invoiceNumber}.pdf`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
+                onClick={handleGenerateInvoice}
               >
                 <IndianRupee className="mr-2 h-4 w-4" />
                 Generate Invoice
