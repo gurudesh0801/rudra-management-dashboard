@@ -31,6 +31,7 @@ import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 import InvoicePDF from "@/components/InvoicePDF/InvoicePDF";
 import { convertToWords } from "@/utils/numberToWords";
 import { pdf } from "@react-pdf/renderer";
+import { AlertToaster, alert } from "@/components/ui/alert-toaster";
 
 // Define types
 interface Product {
@@ -47,14 +48,20 @@ interface InvoiceItem {
   quantity: number;
   price: number;
   total: number;
-  notes?: string;
+  discount?: number; // default 0 if not applied
+  hsn?: string;
+  unit?: string;
   description?: string;
+  notes?: string;
 }
 
 interface CustomerInfo {
   name: string;
-  number: string;
+  number: string; // phone number
   address: string;
+  city?: string; // optional if not always provided
+  pincode?: string;
+  gstin?: string;
 }
 
 const Invoices = () => {
@@ -91,16 +98,118 @@ const Invoices = () => {
   const [productsData, setProductsData] = useState<Product[]>([]);
   const [generatePdf, setGeneratePdf] = useState(false);
 
+  // Save Invoice to API
+  const saveInvoice = async (status: "DRAFT" | "FINAL") => {
+    try {
+      const invoiceData = {
+        invoiceNumber,
+        invoiceDate: new Date().toISOString(),
+        dueDate: new Date().toISOString(),
+        customerInfo,
+        shippingInfo: shippingInfo.address ? shippingInfo : customerInfo,
+        items: items.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.total,
+          description: item.description || "",
+          notes: item.notes || "",
+        })),
+        subtotal,
+        cgst,
+        sgst,
+        total,
+        advancePaid: advancePayment,
+        balanceDue: balance,
+        totalInWords: `${convertToWords(total)} Only`,
+        deliveryDate: new Date().toISOString(),
+        status,
+      };
+
+      const res = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(invoiceData),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to save invoice");
+
+      // Success alert
+      alert.success(
+        `Invoice ${status} saved successfully!`,
+        `Invoice number: ${invoiceNumber}`,
+        {
+          duration: 6000,
+          action: {
+            label: "View Invoices",
+            onClick: () => {
+              // Navigate to invoices list
+              window.location.href = "/dashboard/invoices";
+            },
+          },
+        }
+      );
+    } catch (error: any) {
+      console.error("❌ Error saving invoice:", error);
+
+      // Error alert
+      alert.error(
+        "Failed to save invoice",
+        error.message || "Please try again later",
+        {
+          duration: 8000,
+          action: {
+            label: "Retry",
+            onClick: () => saveInvoice(status),
+          },
+        }
+      );
+    }
+  };
+
   // Fetch products from API
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const res = await fetch("/api/products");
+        if (!res.ok) throw new Error("Failed to fetch products");
+
         const data = await res.json();
         setProductsData(data);
         setFilteredProducts(data);
-      } catch (error) {
+
+        // Show info alert if no products found
+        if (data.length === 0) {
+          alert.info(
+            "No products found",
+            "Add products to your inventory first",
+            {
+              action: {
+                label: "Add Products",
+                onClick: () => {
+                  window.location.href = "/dashboard/products";
+                },
+              },
+            }
+          );
+        }
+      } catch (error: any) {
         console.error("Failed to fetch products:", error);
+
+        // Error alert
+        alert.error(
+          "Failed to load products",
+          error.message || "Please try again later",
+          {
+            duration: 6000,
+            action: {
+              label: "Retry",
+              onClick: fetchProducts,
+            },
+          }
+        );
       }
     };
     fetchProducts();
@@ -126,7 +235,7 @@ const Invoices = () => {
   const sgst = includeGst ? subtotal * 0.06 : 0;
   const gstTotal = cgst + sgst;
   const total = subtotal + gstTotal;
-  const advanceAmount = total * (advancePayment / 100);
+  const advanceAmount = total - advancePayment;
   const balance = total - advanceAmount;
 
   // Handle customer info change
@@ -213,6 +322,7 @@ const Invoices = () => {
 
   return (
     <DashboardLayout>
+      <AlertToaster />
       <div className="container mx-auto p-4 space-y-6 font-open-sans">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-semibold flex items-center text-[#954C2E] font-open-sans">
@@ -224,6 +334,7 @@ const Invoices = () => {
             <Button
               variant="outline"
               className="border-[#954C2E] text-[#954C2E] hover:bg-blue-50 font-open-sans"
+              onClick={() => saveInvoice("DRAFT")}
             >
               <Save className="mr-2 h-4 w-4" />
               Save Draft
@@ -231,6 +342,8 @@ const Invoices = () => {
             <Button
               className="flex-1 bg-[#954C2E] hover:bg-[#734d26] text-white font-open-sans"
               onClick={async () => {
+                await saveInvoice("FINAL");
+
                 const blob = await pdf(
                   <InvoicePDF
                     invoiceData={{
@@ -238,10 +351,28 @@ const Invoices = () => {
                       invoiceNumber,
                       invoiceDate,
                       dueDate: invoiceDate,
-                      customerInfo,
+                      customerInfo: {
+                        name: customerInfo.name || "",
+                        address: customerInfo.address || "",
+                        city: customerInfo.city || "",
+                        pincode: customerInfo.pincode || "",
+                        gstin: customerInfo.gstin || "",
+                      },
                       shippingInfo: shippingInfo.address
-                        ? shippingInfo
-                        : customerInfo,
+                        ? {
+                            name: customerInfo.name,
+                            address: customerInfo.address,
+                            city: customerInfo.city ?? "",
+                            pincode: customerInfo.pincode ?? "",
+                            gstin: customerInfo.gstin ?? "",
+                          }
+                        : {
+                            name: customerInfo.name || "",
+                            address: customerInfo.address || "",
+                            city: customerInfo.city || "",
+                            pincode: customerInfo.pincode || "",
+                            gstin: customerInfo.gstin || "",
+                          },
                       items: items.map((item) => ({
                         name: item.name,
                         hsn: "970300",
@@ -251,6 +382,7 @@ const Invoices = () => {
                         cgst: 6,
                         sgst: 6,
                         amount: item.total,
+                        discount: item.discount ?? 0,
                       })),
                       subtotal,
                       cgst,
@@ -262,6 +394,9 @@ const Invoices = () => {
                         month: "long",
                         day: "numeric",
                       }),
+                      advancePaid: advancePayment,
+                      notes: "",
+                      previousDue: 0,
                     }}
                     logoUrl="/images/logo.png"
                   />
@@ -468,8 +603,17 @@ const Invoices = () => {
                   </div>
                 </div>
                 <Button
-                  onClick={handleAddItem}
-                  disabled={!selectedProduct}
+                  onClick={() => {
+                    if (selectedProduct === null) {
+                      alert.warning(
+                        "No items added",
+                        "Please add at least one product to the invoice"
+                      );
+                      return;
+                    }
+                    handleAddItem();
+                  }}
+                  // disabled={!selectedProduct}
                   className="w-full bg-[#954C2E] hover:bg-[#996600] text-white font-open-sans"
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -749,7 +893,7 @@ const Invoices = () => {
                         id="advance"
                         type="number"
                         min="0"
-                        max="100"
+                        max={total}
                         value={advancePayment}
                         onChange={(e) =>
                           setAdvancePayment(parseInt(e.target.value) || 0)
@@ -763,13 +907,13 @@ const Invoices = () => {
                         <div className="flex justify-between">
                           <span className="text-gray-600">Advance Amount:</span>
                           <span className="text-gray-800">
-                            ₹{advanceAmount.toFixed(2)}
+                            ₹{balance.toFixed(2)}
                           </span>
                         </div>
                         <div className="flex justify-between font-bold pt-2 border-t border-blue-100">
                           <span className="text-green-700">Balance Due:</span>
                           <span className="text-green-700">
-                            ₹{balance.toFixed(2)}
+                            ₹{advanceAmount.toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -797,6 +941,7 @@ const Invoices = () => {
               <Button
                 className="flex-1 bg-[#954C2E] hover:bg-[#734d26] text-white font-open-sans"
                 onClick={async () => {
+                  await saveInvoice("FINAL");
                   const blob = await pdf(
                     <InvoicePDF
                       invoiceData={{
@@ -804,10 +949,28 @@ const Invoices = () => {
                         invoiceNumber,
                         invoiceDate,
                         dueDate: invoiceDate,
-                        customerInfo,
+                        customerInfo: {
+                          name: customerInfo.name || "",
+                          address: customerInfo.address || "",
+                          city: customerInfo.city || "",
+                          pincode: customerInfo.pincode || "",
+                          gstin: customerInfo.gstin || "",
+                        },
                         shippingInfo: shippingInfo.address
-                          ? shippingInfo
-                          : customerInfo,
+                          ? {
+                              name: customerInfo.name,
+                              address: customerInfo.address,
+                              city: customerInfo.city ?? "",
+                              pincode: customerInfo.pincode ?? "",
+                              gstin: customerInfo.gstin ?? "",
+                            }
+                          : {
+                              name: customerInfo.name || "",
+                              address: customerInfo.address || "",
+                              city: customerInfo.city || "",
+                              pincode: customerInfo.pincode || "",
+                              gstin: customerInfo.gstin || "",
+                            },
                         items: items.map((item) => ({
                           name: item.name,
                           hsn: "970300",
@@ -817,6 +980,7 @@ const Invoices = () => {
                           cgst: 6,
                           sgst: 6,
                           amount: item.total,
+                          discount: item.discount ?? 0,
                         })),
                         subtotal,
                         cgst,
@@ -828,6 +992,9 @@ const Invoices = () => {
                           month: "long",
                           day: "numeric",
                         }),
+                        advancePaid: advancePayment,
+                        notes: "",
+                        previousDue: 0,
                       }}
                       logoUrl="/images/logo.png"
                     />

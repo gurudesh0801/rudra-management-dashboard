@@ -21,7 +21,6 @@ import {
   ShoppingCart,
   ArrowRight,
   TrendingUp,
-  Shield,
   UserCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -31,7 +30,6 @@ type User = {
   role: "SUPER_ADMIN" | "ADMIN" | "USER";
 };
 
-// Define the service card type
 type ServiceCard = {
   title: string;
   description: string;
@@ -52,16 +50,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Define all service cards
   const allServiceCards: ServiceCard[] = [
-    // {
-    //   title: "Dashboard Overview",
-    //   description: "View key metrics and performance indicators",
-    //   icon: <LayoutDashboard className="h-8 w-8" />,
-    //   href: "/dashboard",
-    //   role: ["SUPER_ADMIN", "ADMIN", "USER"],
-    //   badge: "Essential",
-    // },
     {
       title: "Billing & Invoices",
       description: "Create, view and manage invoices",
@@ -118,14 +107,6 @@ export default function DashboardPage() {
       role: ["SUPER_ADMIN", "ADMIN"],
       badge: "Analytics",
     },
-    // {
-    //   title: "Security Settings",
-    //   description: "Configure system security parameters",
-    //   icon: <Shield className="h-8 w-8" />,
-    //   href: "/super-admin/security",
-    //   role: ["SUPER_ADMIN"],
-    //   badge: "Admin Only",
-    // },
     {
       title: "Profile Management",
       description: "Update your personal information and preferences",
@@ -136,13 +117,14 @@ export default function DashboardPage() {
     },
   ];
 
-  // Filter cards based on user role
   const filteredCards = user
     ? allServiceCards.filter((card) => card.role.includes(user.role))
     : [];
 
-  const handleCardClick = (href: string) => {
-    router.push(href);
+  const handleCardClick = (href: string, isDisabled: boolean) => {
+    if (!isDisabled) {
+      router.push(href);
+    }
   };
 
   if (!user) {
@@ -171,38 +153,59 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCards.map((card, index) => (
-            <Card
-              key={index}
-              className="cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-300"
-              onClick={() => handleCardClick(card.href)}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="flex items-center space-x-2">
-                  <div className="p-2 rounded-md bg-blue-100 text-blue-600">
-                    {card.icon}
+          {filteredCards.map((card, index) => {
+            const isDisabled = index !== 0; // only first card is enabled
+            return (
+              <Card
+                key={index}
+                className={`cursor-pointer transition-all duration-200 ${
+                  isDisabled
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:shadow-md hover:border-blue-300"
+                }`}
+                onClick={() => handleCardClick(card.href, isDisabled)}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div className="flex items-center space-x-2">
+                    <div
+                      className={`p-2 rounded-md ${
+                        isDisabled
+                          ? "bg-gray-100 text-gray-400"
+                          : "bg-blue-100 text-blue-600"
+                      }`}
+                    >
+                      {card.icon}
+                    </div>
+                    <CardTitle className="text-lg">{card.title}</CardTitle>
                   </div>
-                  <CardTitle className="text-lg">{card.title}</CardTitle>
-                </div>
-                {card.badge && (
-                  <Badge variant="outline" className="ml-2">
-                    {card.badge}
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-sm mb-4">
-                  {card.description}
-                </CardDescription>
-                <Button
-                  variant="ghost"
-                  className="p-0 h-auto text-blue-600 hover:text-blue-800"
-                >
-                  Access service <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  {card.badge && (
+                    <Badge variant="outline" className="ml-2">
+                      {card.badge}
+                    </Badge>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-sm mb-4">
+                    {card.description}
+                  </CardDescription>
+                  <Button
+                    variant="ghost"
+                    className={`p-0 h-auto ${
+                      isDisabled
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "text-blue-600 hover:text-blue-800"
+                    }`}
+                    disabled={isDisabled}
+                  >
+                    {isDisabled ? "Disabled" : "Access service"}{" "}
+                    {!isDisabled && (
+                      <ArrowRight className="ml-1 h-4 w-4 inline" />
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         {filteredCards.length === 0 && (

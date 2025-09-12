@@ -19,6 +19,9 @@ import {
   HelpCircle,
   Menu,
   X,
+  ChevronRight,
+  PlusCircle,
+  List,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
@@ -40,11 +43,25 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
+interface MenuItem {
+  name: string;
+  href: string;
+  icon: any;
+  subItems?: SubMenuItem[];
+}
+
+interface SubMenuItem {
+  name: string;
+  href: string;
+  icon: any;
+}
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({});
   const router = useRouter();
   const pathname = usePathname();
 
@@ -74,56 +91,75 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [router]);
 
-  // ✅ Role-based menu items
-  const menuItems: Record<string, { name: string; href: string; icon: any }[]> =
-    {
-      SUPER_ADMIN: [
-        {
-          name: "Dashboard",
-          href: "/dashboard",
-          icon: LayoutDashboard,
-        },
-        {
-          name: "Inventory",
-          href: "/super-admin/inventory",
-          icon: Package,
-        },
-        {
-          name: "Expenses",
-          href: "/super-admin/expenses",
-          icon: CreditCard,
-        },
-        {
-          name: "Billing & Invoices",
-          href: "/super-admin/invoices",
-          icon: FileText,
-        },
-        { name: "Users", href: "/super-admin/users", icon: Users },
-        {
-          name: "Resellers",
-          href: "/super-admin/resellers",
-          icon: BarChart,
-        },
-      ],
-      ADMIN: [
-        {
-          name: "Dashboard",
-          href: "/admin/dashboard",
-          icon: LayoutDashboard,
-        },
-        {
-          name: "Inventory",
-          href: "/admin/inventory",
-          icon: Package,
-        },
-        { name: "Invoices", href: "/admin/invoices", icon: FileText },
-      ],
-      USER: [
-        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Invoices", href: "/invoices", icon: FileText },
-        { name: "Products", href: "/products", icon: ShoppingCart },
-      ],
-    };
+  // Toggle submenu
+  const toggleSubmenu = (menuName: string) => {
+    setOpenSubmenus((prev) => ({
+      ...prev,
+      [menuName]: !prev[menuName],
+    }));
+  };
+
+  // ✅ Role-based menu items with submenus
+  const menuItems: Record<string, MenuItem[]> = {
+    SUPER_ADMIN: [
+      {
+        name: "Dashboard",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+      },
+      {
+        name: "Inventory",
+        href: "/super-admin/inventory/inventory-management",
+        icon: Package,
+      },
+      {
+        name: "Expenses",
+        href: "/super-admin/expenses",
+        icon: CreditCard,
+      },
+      {
+        name: "Billing & Invoices",
+        href: "#", // Using href="#" for menu items with submenus
+        icon: FileText,
+        subItems: [
+          {
+            name: "Create Invoice",
+            href: "/super-admin/invoices",
+            icon: PlusCircle,
+          },
+          {
+            name: "All Invoices",
+            href: "/super-admin/invoicemanagement",
+            icon: List,
+          },
+        ],
+      },
+      { name: "Users", href: "/super-admin/users", icon: Users },
+      {
+        name: "Resellers",
+        href: "/super-admin/resellers",
+        icon: BarChart,
+      },
+    ],
+    ADMIN: [
+      {
+        name: "Dashboard",
+        href: "/admin/dashboard",
+        icon: LayoutDashboard,
+      },
+      {
+        name: "Inventory",
+        href: "/admin/inventory",
+        icon: Package,
+      },
+      { name: "Invoices", href: "/admin/invoices", icon: FileText },
+    ],
+    USER: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { name: "Invoices", href: "/invoices", icon: FileText },
+      { name: "Products", href: "/products", icon: ShoppingCart },
+    ],
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -137,6 +173,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       setSidebarOpen(false);
     }
   }, [pathname, isMobile]);
+
+  // Check if a menu item is active (including submenu items)
+  const isMenuItemActive = (item: MenuItem) => {
+    if (item.href !== "#" && pathname === item.href) return true;
+
+    if (item.subItems) {
+      return item.subItems.some((subItem) => pathname === subItem.href);
+    }
+
+    return false;
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50/50">
@@ -168,12 +215,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             transition={{ delay: 0.1 }}
             className="flex items-center space-x-2"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-amber-800 to-amber-600 flex items-center justify-center">
               <LayoutDashboard className="h-5 w-5 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-orange-600 bg-clip-text text-transparent">
-              Dashboard
-            </span>
+            <span className="text-xl font-bold text-white">Dashboard</span>
           </motion.div>
           {isMobile && (
             <button className="p-2" onClick={() => setSidebarOpen(false)}>
@@ -214,7 +259,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <nav className="flex-1 overflow-y-auto px-2 py-6 space-y-1">
           {role &&
             menuItems[role]?.map((item, index) => {
-              const isActive = pathname === item.href;
+              const isActive = isMenuItemActive(item);
+              const hasSubmenu = item.subItems && item.subItems.length > 0;
+              const isSubmenuOpen = openSubmenus[item.name] || false;
+
               return (
                 <motion.div
                   key={item.name}
@@ -222,25 +270,101 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * (index + 1) }}
                 >
-                  <Link href={item.href}>
-                    <Button
-                      variant={isActive ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full flex items-center justify-start space-x-3 px-4 py-3 transition-all duration-200",
-                        isActive
-                          ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
-                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                      )}
-                    >
-                      <item.icon
+                  {hasSubmenu ? (
+                    <div>
+                      <Button
+                        variant={isActive ? "secondary" : "ghost"}
                         className={cn(
-                          "h-5 w-5",
-                          isActive ? "text-blue-600" : "text-gray-400"
+                          "w-full flex items-center justify-between px-4 py-3 transition-all duration-200",
+                          isActive
+                            ? "bg-blue-50 text-amber-900 border-r-2 border-amber-600"
+                            : "text-gray-300 hover:bg-gray-800 hover:text-white"
                         )}
-                      />
-                      <span className="font-medium">{item.name}</span>
-                    </Button>
-                  </Link>
+                        onClick={() => toggleSubmenu(item.name)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <item.icon
+                            className={cn(
+                              "h-5 w-5",
+                              isActive ? "text-amber-800" : "text-gray-400"
+                            )}
+                          />
+                          <span className="font-medium">{item.name}</span>
+                        </div>
+                        <ChevronRight
+                          className={cn(
+                            "h-4 w-4 transition-transform",
+                            isSubmenuOpen && "rotate-90"
+                          )}
+                        />
+                      </Button>
+
+                      <AnimatePresence>
+                        {isSubmenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="ml-6 mt-1 space-y-1 overflow-hidden"
+                          >
+                            {item.subItems?.map((subItem) => {
+                              const isSubItemActive = pathname === subItem.href;
+                              return (
+                                <Link
+                                  key={subItem.name}
+                                  href={subItem.href}
+                                  className="block"
+                                >
+                                  <Button
+                                    variant={
+                                      isSubItemActive ? "secondary" : "ghost"
+                                    }
+                                    className={cn(
+                                      "w-full flex items-center space-x-3 px-4 py-2 text-sm transition-all duration-200",
+                                      isSubItemActive
+                                        ? "bg-blue-50 text-amber-900 border-r-2 border-amber-600"
+                                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                                    )}
+                                  >
+                                    <subItem.icon
+                                      className={cn(
+                                        "h-4 w-4",
+                                        isSubItemActive
+                                          ? "text-amber-800"
+                                          : "text-gray-400"
+                                      )}
+                                    />
+                                    <span>{subItem.name}</span>
+                                  </Button>
+                                </Link>
+                              );
+                            })}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    <Link href={item.href}>
+                      <Button
+                        variant={isActive ? "secondary" : "ghost"}
+                        className={cn(
+                          "w-full flex items-center justify-start space-x-3 px-4 py-3 transition-all duration-200",
+                          isActive
+                            ? "bg-blue-50 text-amber-900 border-r-2 border-amber-600"
+                            : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                        )}
+                      >
+                        <item.icon
+                          className={cn(
+                            "h-5 w-5",
+                            isActive ? "text-amber-800" : "text-gray-400"
+                          )}
+                        />
+                        <span className="font-medium">{item.name}</span>
+                      </Button>
+                    </Link>
+                  )}
                 </motion.div>
               );
             })}
@@ -255,7 +379,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         >
           <Button
             variant="outline"
-            className="w-full flex items-center justify-center gap-2 text-black hover:text-red-600 hover:border-red-200 hover:bg-red-50"
+            className="w-full flex items-center justify-center gap-2 text-white hover:text-red-600 hover:border-red-200 hover:bg-red-50"
             onClick={handleLogout}
           >
             <LogOut className="h-4 w-4" />

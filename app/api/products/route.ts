@@ -25,11 +25,18 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, price, description, size, category } = body;
 
+    if (!name || !price || !category) {
+      return NextResponse.json(
+        { error: "Name, price, and category are required" },
+        { status: 400 }
+      );
+    }
+
     const newProduct = await prisma.product.create({
-      data: { name, price, description, size, category },
+      data: { name, price, size, category },
     });
 
-    return NextResponse.json(newProduct);
+    return NextResponse.json(newProduct, { status: 201 });
   } catch (error) {
     console.error("Error creating product:", error);
     return NextResponse.json(

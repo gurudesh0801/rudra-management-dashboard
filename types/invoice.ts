@@ -25,6 +25,7 @@ export interface InvoiceItem {
   discount: number;
   cgst: number;
   sgst: number;
+  description?: string;
   amount: number;
 }
 
@@ -37,9 +38,14 @@ export interface InvoiceData {
   shippingInfo: CustomerInfo;
   items: InvoiceItem[];
   subtotal: number;
+  notes: string;
+  previousDue: number;
   cgst: number;
   sgst: number;
   total: number;
+  advancePaid?: number;
+  balanceDue?: number;
+  status?: string;
   totalInWords: string;
   deliveryDate: string;
 }

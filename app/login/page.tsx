@@ -215,7 +215,7 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full mt-4"
+                  className="w-full mt-4 bg-amber-900 text-white"
                   size="lg"
                 >
                   {isLoading ? (

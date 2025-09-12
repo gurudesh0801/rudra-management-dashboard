@@ -1,13 +1,14 @@
-// prisma/schema.prisma
+// schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // or "mysql" / "sqlite"
   url      = env("DATABASE_URL")
 }
 
+// ====================== USERS ======================
 enum UserRole {
   SUPER_ADMIN
   ADMIN
@@ -24,13 +25,76 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
+// ====================== CUSTOMER ======================
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  number    String    @unique
+  address   String?
+  invoices  Invoice[]
+  shipping  ShippingInfo[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// ====================== SHIPPING ======================
+model ShippingInfo {
+  id         Int       @id @default(autoincrement())
+  name       String
+  address    String
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId Int?
+  invoice    Invoice[]
+}
+
+// ====================== PRODUCT ======================
 model Product {
-  id          String   @id @default(cuid())          // product_id
-  name        String                                 // product_name
-  price       Float                                  // product_price
-  description String?                                // product_description
-  size        String?                                // product_size
-  category    String?                                // product_category
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        Int            @id @default(autoincrement())
+  name      String
+  size      String?
+  price     Float
+  category  String
+  items     InvoiceItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+// ====================== INVOICE ======================
+model Invoice {
+  id            Int           @id @default(autoincrement())
+  invoiceNumber String        @unique
+  invoiceDate   DateTime
+  dueDate       DateTime
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  customerId    Int
+  shipping      ShippingInfo? @relation(fields: [shippingId], references: [id])
+  shippingId    Int?
+  items         InvoiceItem[]
+  subtotal      Float
+  cgst          Float
+  sgst          Float
+  total         Float
+  advancePaid   Float         @default(0)
+  balanceDue    Float
+  totalInWords  String
+  deliveryDate  DateTime
+  status        String        @default("DRAFT") // NEW
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+
+// ====================== INVOICE ITEM ======================
+model InvoiceItem {
+  id          Int      @id @default(autoincrement())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  invoiceId   Int
+  product     Product  @relation(fields: [productId], references: [id])
+  productId   Int
+  name        String
+  quantity    Int
+  price       Float
+  total       Float
+  notes       String?
+  description String?
 }

@@ -34,69 +34,83 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    paddingBottom: 15,
-  },
-  companySection: {
-    width: "60%",
-    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 15,
   },
   logoAndTitle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-  },
-  logoContainer: {
-    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
   },
   logo: {
-    width: 70,
-    height: 70,
-  },
-  titleContainer: {
-    flex: 1,
+    width: 23,
+    height: 30,
+    marginRight: 10,
   },
   companyName: {
     fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 4,
     color: "#1a365d",
     textTransform: "uppercase",
-  },
-  companyInfo: {
-    marginLeft: 80, // Offset for the logo
   },
   companyDetails: {
     fontSize: 9,
     marginBottom: 2,
     color: "#4a5568",
     lineHeight: 1.3,
+    textAlign: "center",
+    margin: "auto",
   },
-  invoiceSection: {
-    width: "40%",
-    alignItems: "flex-end",
+  // NEW: Added style for centered address line
+  centeredAddressLine: {
+    fontSize: 9,
+    marginBottom: 2,
+    color: "#4a5568",
+    lineHeight: 1.3,
+    textAlign: "center",
+    // width: "100%",
   },
-  invoiceInfo: {
-    alignItems: "flex-end",
+  invoiceTitleSection: {
+    alignItems: "center",
+    marginBottom: 5,
   },
   invoiceTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 8,
     color: "#1a365d",
+    marginBottom: 5,
   },
-  invoiceDetails: {
-    fontSize: 9,
-    marginBottom: 3,
+  // Updated invoice info container
+  invoiceInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#d0d0d0",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  // New styles for bordered invoice number and date
+  invoiceNumberContainer: {
+    flex: 1,
+    padding: 10,
+    borderRightWidth: 1,
+    borderRightColor: "#d0d0d0",
+  },
+  invoiceDateContainer: {
+    flex: 1,
+    padding: 10,
+  },
+  invoiceNumber: {
+    fontSize: 10,
     color: "#4a5568",
   },
-  section: {
-    marginBottom: 15,
+  invoiceDate: {
+    fontSize: 10,
+    color: "#4a5568",
   },
   twoColumn: {
     flexDirection: "row",
@@ -186,7 +200,7 @@ const styles = StyleSheet.create({
   summary: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginBottom: 20,
+    marginBottom: 15,
   },
   summaryContent: {
     width: "40%",
@@ -229,7 +243,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 10,
-    color: "##4a5568",
+    color: "#4a5568",
   },
   summaryValue: {
     fontSize: 10,
@@ -240,17 +254,28 @@ const styles = StyleSheet.create({
     borderTopColor: "#e0e0e0",
     fontWeight: "bold",
   },
-  notes: {
-    marginTop: 20,
-    padding: 12,
+  totalInWords: {
+    padding: 10,
+    backgroundColor: "#f0f9ff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 4,
+    marginBottom: 15,
+  },
+  terms: {
+    marginBottom: 15,
+    padding: 10,
     backgroundColor: "#f9f9f9",
     borderWidth: 1,
     borderColor: "#e0e0e0",
     borderRadius: 4,
   },
+  termItem: {
+    fontSize: 9,
+    marginBottom: 4,
+    color: "#4a5568",
+  },
   footer: {
-    marginTop: "auto",
-    paddingTop: 20,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -258,15 +283,47 @@ const styles = StyleSheet.create({
     color: "gray",
     borderTopWidth: 1,
     borderTopColor: "#e0e0e0",
+    paddingTop: 15,
   },
-  footerNotes: {
-    width: "60%",
-    paddingRight: 10,
+  footerLeft: {
+    width: "50%",
   },
-  footerSignature: {
-    width: "40%",
-    textAlign: "right",
-    paddingLeft: 10,
+  footerRight: {
+    width: "50%",
+    alignItems: "flex-end",
+  },
+  footerSection: {
+    marginBottom: 10,
+  },
+  footerSectionTitle: {
+    fontSize: 10,
+    fontWeight: "bold",
+    marginBottom: 5,
+    color: "#2c3e50",
+  },
+  signature: {
+    marginTop: 30,
+    alignItems: "center",
+  },
+  amountDueSection: {
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "#d0d0d0",
+    padding: 10,
+  },
+  amountDueRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+  amountDueLabel: {
+    fontSize: 10,
+    color: "#4a5568",
+  },
+  amountDueValue: {
+    fontSize: 10,
+    color: "#4a5568",
+    fontWeight: "bold",
   },
   watermark: {
     position: "absolute",
@@ -279,14 +336,6 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontWeight: "bold",
-  },
-  totalInWords: {
-    padding: 10,
-    backgroundColor: "#f0f9ff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 4,
-    marginBottom: 15,
   },
 });
 
@@ -305,12 +354,11 @@ interface InvoicePDFProps {
 }
 
 // Create Invoice Document component with proper typing
+// Create Invoice Document component with proper typing
 const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
   const {
-    companyDetails,
     invoiceNumber,
     invoiceDate,
-    dueDate,
     customerInfo,
     shippingInfo,
     items,
@@ -321,7 +369,40 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
     totalInWords,
     notes,
     deliveryDate,
+    advancePaid,
   } = invoiceData;
+
+  console.log(advancePaid, "advancePaid");
+
+  // Table Header Component (to be repeated on each page)
+  const TableHeader = () => (
+    <View style={[styles.tableRow, styles.tableHeader]} fixed>
+      <View style={styles.tableColSmall}>
+        <Text style={styles.tableCellHeader}>#</Text>
+      </View>
+      <View style={styles.tableColLarge}>
+        <Text style={styles.tableCellHeader}>Item & Description</Text>
+      </View>
+      <View style={styles.tableColMedium}>
+        <Text style={styles.tableCellHeader}>HSN /SAC</Text>
+      </View>
+      <View style={styles.tableColSmall}>
+        <Text style={styles.tableCellHeader}>Qty</Text>
+      </View>
+      <View style={styles.tableColMedium}>
+        <Text style={styles.tableCellHeader}>Rate (Rs.)</Text>
+      </View>
+      <View style={styles.tableColSmall}>
+        <Text style={styles.tableCellHeader}>CGST</Text>
+      </View>
+      <View style={styles.tableColSmall}>
+        <Text style={styles.tableCellHeader}>SGST</Text>
+      </View>
+      <View style={[styles.tableColMedium, { borderRightWidth: 0 }]}>
+        <Text style={styles.tableCellHeader}>Amount (Rs.)</Text>
+      </View>
+    </View>
+  );
 
   return (
     <Document>
@@ -330,48 +411,45 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
         <View style={styles.pageBorder} fixed />
 
         {/* Watermark */}
-        <Text style={styles.watermark}>{companyDetails.name}</Text>
+        <Text style={styles.watermark}>Rudra Arts & Handicrafts</Text>
 
-        {/* Header with logo, title, and address on left, tax invoice on right */}
+        {/* Header with centered logo and company name */}
         <View style={styles.header}>
-          <View style={styles.companySection}>
-            <View style={styles.logoAndTitle}>
-              {logoUrl && (
-                <View style={styles.logoContainer}>
-                  <Image style={styles.logo} src={logoUrl} />
-                </View>
-              )}
-              <View style={styles.titleContainer}>
-                <Text style={styles.companyName}>Rudra Arts & Handicrafts</Text>
-              </View>
-            </View>
-
-            <View style={styles.companyInfo}>
-              <Text style={styles.companyDetails}>
-                Samata Nagar, Ganesh Nagar Lane No 1, Famous Chowk, New Sangavi,
-              </Text>
-              <Text style={styles.companyDetails}>
-                Pune Maharashtra 411061, India
-              </Text>
-              <Text style={styles.companyDetails}>
-                GSTIN: 27AMWPV8148A1ZE | 9595221296 | rudraarts30@gmail.com
-              </Text>
-            </View>
+          <View style={styles.logoAndTitle}>
+            {logoUrl && <Image style={styles.logo} src={logoUrl} />}
+            <Text style={styles.companyName}>Rudra Arts & Handicrafts</Text>
           </View>
 
-          <View style={styles.invoiceSection}>
-            <View style={styles.invoiceInfo}>
-              <Text style={styles.invoiceTitle}>TAX INVOICE</Text>
-              <Text style={styles.invoiceDetails}>
-                <Text style={styles.boldText}>Invoice No:</Text> {invoiceNumber}
-              </Text>
-              <Text style={styles.invoiceDetails}>
-                <Text style={styles.boldText}>Invoice Date:</Text> {invoiceDate}
-              </Text>
-              <Text style={styles.invoiceDetails}>
-                <Text style={styles.boldText}>Due Date:</Text> {dueDate}
-              </Text>
-            </View>
+          <View>
+            {/* First line of address */}
+            <Text style={styles.companyDetails}>
+              {" "}
+              Samata Nagar, Ganesh Nagar Lane No 1, Famous Chowk, New Sangavi,
+              Pune Maharashtra 411061, India
+            </Text>
+
+            <Text style={styles.companyDetails}>
+              GSTIN: 27AMWPV8148A1ZE | 9595221296 | rudraarts30@gmail.com
+            </Text>
+          </View>
+        </View>
+
+        {/* Invoice Title */}
+        <View style={styles.invoiceTitleSection}>
+          <Text style={styles.invoiceTitle}>TAX INVOICE</Text>
+        </View>
+
+        {/* Invoice Number and Date with border and vertical divider */}
+        <View style={styles.invoiceInfo}>
+          <View style={styles.invoiceNumberContainer}>
+            <Text style={styles.invoiceNumber}>
+              <Text style={styles.boldText}>Invoice No:</Text> {invoiceNumber}
+            </Text>
+          </View>
+          <View style={styles.invoiceDateContainer}>
+            <Text style={styles.invoiceDate}>
+              <Text style={styles.boldText}>Invoice Date:</Text> {invoiceDate}
+            </Text>
           </View>
         </View>
 
@@ -403,7 +481,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
         </View>
 
         {/* Additional Info */}
-        <View style={styles.section}>
+        <View style={styles.sectionTitle}>
           <Text style={styles.infoText}>
             <Text style={styles.boldText}>Place Of Supply:</Text> Maharashtra
             (27)
@@ -415,33 +493,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
 
         {/* Items Table with full borders */}
         <View style={styles.table}>
-          {/* Table Header */}
-          <View style={[styles.tableRow, styles.tableHeader]}>
-            <View style={styles.tableColSmall}>
-              <Text style={styles.tableCellHeader}>#</Text>
-            </View>
-            <View style={styles.tableColLarge}>
-              <Text style={styles.tableCellHeader}>Item & Description</Text>
-            </View>
-            <View style={styles.tableColMedium}>
-              <Text style={styles.tableCellHeader}>HSN /SAC</Text>
-            </View>
-            <View style={styles.tableColSmall}>
-              <Text style={styles.tableCellHeader}>Qty</Text>
-            </View>
-            <View style={styles.tableColMedium}>
-              <Text style={styles.tableCellHeader}>Rate (Rs.)</Text>
-            </View>
-            <View style={styles.tableColSmall}>
-              <Text style={styles.tableCellHeader}>CGST</Text>
-            </View>
-            <View style={styles.tableColSmall}>
-              <Text style={styles.tableCellHeader}>SGST</Text>
-            </View>
-            <View style={[styles.tableColMedium, { borderRightWidth: 0 }]}>
-              <Text style={styles.tableCellHeader}>Amount (Rs.)</Text>
-            </View>
-          </View>
+          {/* Table Header - This will appear on every page */}
+          <TableHeader />
 
           {/* Table Rows */}
           {items.map((item, index) => (
@@ -485,14 +538,6 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
               </View>
             </View>
           ))}
-        </View>
-
-        {/* Total in Words */}
-        <View style={styles.totalInWords}>
-          <Text style={styles.infoText}>
-            <Text style={styles.boldText}>Total in Words: </Text>
-            {totalInWords}
-          </Text>
         </View>
 
         {/* Totals and Summary with borders */}
@@ -560,49 +605,76 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
                 </Text>
               </View>
             </View>
-
-            {/* Balance Due */}
-            <View style={[styles.summaryRow, styles.totalRow]}>
-              <View
-                style={[styles.summaryLabelCell, styles.summaryBorderRight]}
-              >
-                <Text style={[styles.summaryLabel, styles.boldText]}>
-                  Balance Due:
-                </Text>
-              </View>
-              <View style={styles.summaryValueCell}>
-                <Text style={[styles.summaryValue, styles.boldText]}>
-                  Rs.{formatIndianCurrency(total)}
-                </Text>
-              </View>
-            </View>
           </View>
+        </View>
+
+        {/* Total in Words */}
+        <View style={styles.totalInWords}>
+          <Text style={styles.infoText}>
+            <Text style={styles.boldText}>Total in Words: </Text>
+            {totalInWords}
+          </Text>
+        </View>
+
+        {/* Terms and Conditions */}
+        <View style={styles.terms}>
+          <Text style={styles.sectionTitle}>Terms and Conditions:</Text>
+          <Text style={styles.termItem}>
+            1) Goods once sold cannot be taken back or replaced.
+          </Text>
+          <Text style={styles.termItem}>
+            2) Payment should be done within 10 days from issue date of invoice.
+          </Text>
         </View>
 
         {/* Footer */}
         <View style={styles.footer} wrap={false}>
-          <View style={styles.footerNotes}>
-            <Text style={[styles.infoText, { fontStyle: "italic" }]}>
-              Note*: Product will be delivered in 15 days after booking.
-            </Text>
-            {notes && (
-              <>
-                <Text
-                  style={[
-                    styles.sectionTitle,
-                    { borderBottomWidth: 0, marginTop: 10 },
-                  ]}
-                >
-                  Notes:
-                </Text>
-                <Text style={styles.infoText}>{notes}</Text>
-              </>
-            )}
+          <View style={styles.footerLeft}>
+            <View style={styles.footerSection}>
+              <Text style={styles.footerSectionTitle}>Company Details:</Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.boldText}>State:</Text> Maharashtra
+              </Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.boldText}>State Code:</Text> 27
+              </Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.boldText}>GSTIN:</Text> 27AMWPV8148A1ZE
+              </Text>
+            </View>
+            <View style={styles.footerSection}>
+              <Text style={styles.infoText}>A/C QR Code Placeholder</Text>
+            </View>
           </View>
-          <View style={styles.footerSignature}>
-            <Text>Authorized Signature</Text>
-            <Text>_________________________</Text>
-            <Text>Rudra Arts & Handicrafts</Text>
+
+          <View style={styles.footerRight}>
+            <View style={styles.signature}>
+              <Text>Authorized Signature</Text>
+              <Text>_________________________</Text>
+              <Text>Rudra Arts & Handicrafts</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Amount Due Section */}
+        <View style={styles.amountDueSection}>
+          <View style={styles.amountDueRow}>
+            <Text style={styles.amountDueLabel}>Amount Due:</Text>
+            <Text style={styles.amountDueValue}>
+              Rs.{formatIndianCurrency(total - advancePaid! || 0)}
+            </Text>
+          </View>
+          <View style={styles.amountDueRow}>
+            <Text style={styles.amountDueLabel}>Previous Due:</Text>
+            <Text style={styles.amountDueValue}>
+              Rs.{formatIndianCurrency(advancePaid || 0)}
+            </Text>
+          </View>
+          <View style={styles.amountDueRow}>
+            <Text style={styles.amountDueLabel}>Total:</Text>
+            <Text style={styles.amountDueValue}>
+              Rs.{formatIndianCurrency(total)}
+            </Text>
           </View>
         </View>
       </Page>
