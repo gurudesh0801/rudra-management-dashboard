@@ -374,6 +374,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
 
   console.log(advancePaid, "advancePaid");
 
+  console.log(invoiceData, "invoiceData in pdf");
+
   // Table Header Component (to be repeated on each page)
   const TableHeader = () => (
     <View style={[styles.tableRow, styles.tableHeader]} fixed>
@@ -392,6 +394,11 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
       <View style={styles.tableColMedium}>
         <Text style={styles.tableCellHeader}>Rate (Rs.)</Text>
       </View>
+      {items.some((item) => item.discount > 0) && (
+        <View style={styles.tableColSmall}>
+          <Text style={styles.tableCellHeader}>Disc.</Text>
+        </View>
+      )}
       <View style={styles.tableColSmall}>
         <Text style={styles.tableCellHeader}>CGST</Text>
       </View>
@@ -522,9 +529,16 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
               </View>
               <View style={styles.tableColMedium}>
                 <Text style={styles.tableCell}>
-                  {formatIndianCurrency(item.rate)}
+                  {formatIndianCurrency(item.rate * item.quantity)}
                 </Text>
               </View>
+              {items.some((itm) => itm.discount > 0) && (
+                <View style={styles.tableColSmall}>
+                  <Text style={styles.tableCell}>
+                    {item.discount > 0 ? `${item.discount}%` : "-"}
+                  </Text>
+                </View>
+              )}
               <View style={styles.tableColSmall}>
                 <Text style={styles.tableCell}>{item.cgst}%</Text>
               </View>
@@ -601,7 +615,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
               </View>
               <View style={styles.summaryValueCell}>
                 <Text style={[styles.summaryValue, styles.boldText]}>
-                  Rs.{formatIndianCurrency(total)}
+                  Rs.{formatIndianCurrency(subtotal)}
                 </Text>
               </View>
             </View>
@@ -661,7 +675,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
           <View style={styles.amountDueRow}>
             <Text style={styles.amountDueLabel}>Amount Due:</Text>
             <Text style={styles.amountDueValue}>
-              Rs.{formatIndianCurrency(total - advancePaid! || 0)}
+              Rs.{formatIndianCurrency(subtotal - advancePaid! || 0)}
             </Text>
           </View>
           <View style={styles.amountDueRow}>
@@ -673,7 +687,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoiceData, logoUrl }) => {
           <View style={styles.amountDueRow}>
             <Text style={styles.amountDueLabel}>Total:</Text>
             <Text style={styles.amountDueValue}>
-              Rs.{formatIndianCurrency(total)}
+              Rs.{formatIndianCurrency(subtotal)}
             </Text>
           </View>
         </View>

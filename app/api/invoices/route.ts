@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { generateInvoiceNumber } from "@/utils/invoiceNumberGenerator";
 
 const prisma = new PrismaClient(); // ✅ Create an instance
 
@@ -8,7 +9,7 @@ export async function POST(req: Request) {
   try {
     const data = await req.json();
     const {
-      invoiceNumber,
+      // Remove invoiceNumber from destructuring as we'll generate it
       invoiceDate,
       dueDate,
       customerInfo,
@@ -22,8 +23,11 @@ export async function POST(req: Request) {
       balanceDue,
       totalInWords,
       deliveryDate,
-      status, // "DRAFT" or "FINAL"
+      status,
     } = data;
+
+    // Generate invoice number
+    const invoiceNumber = await generateInvoiceNumber();
 
     // ✅ Upsert Customer
     const customer = await prisma.customer.upsert({
@@ -39,7 +43,8 @@ export async function POST(req: Request) {
       },
     });
 
-    // ✅ Create Shipping Info (optional)
+    // Rest of your existing code...
+    // Create Shipping Info (if provided)
     let shipping = null;
     if (shippingInfo?.address) {
       shipping = await prisma.shippingInfo.create({
@@ -51,26 +56,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // ✅ Create or Update Invoice
-    const invoice = await prisma.invoice.upsert({
-      where: { invoiceNumber },
-      update: {
-        invoiceDate: new Date(invoiceDate),
-        dueDate: new Date(dueDate),
-        customerId: customer.id,
-        shippingId: shipping?.id,
-        subtotal,
-        cgst,
-        sgst,
-        total,
-        advancePaid,
-        balanceDue,
-        totalInWords,
-        deliveryDate: new Date(deliveryDate),
-        status,
-      },
-      create: {
-        invoiceNumber,
+    // Create Invoice
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoiceNumber, // Use the generated invoice number
         invoiceDate: new Date(invoiceDate),
         dueDate: new Date(dueDate),
         customerId: customer.id,

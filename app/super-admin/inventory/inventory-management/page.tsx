@@ -454,11 +454,14 @@ const ProductManagement = () => {
                       Price
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      Quantity
+                    </th>
+                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Category
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Created
-                    </th>
+                    </th> */}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Actions
                     </th>
@@ -487,12 +490,15 @@ const ProductManagement = () => {
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
                           {formatCurrency(product.price)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          {}
+                        </td>
+                        {/* <td className="px-4 py-3 text-sm text-gray-900">
                           <Badge variant="secondary">{product.category}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
+                        </td> */}
+                        {/* <td className="px-4 py-3 text-sm text-gray-900">
                           {formatDate(product.createdAt)}
-                        </td>
+                        </td> */}
                         <td className="px-4 py-3 text-sm font-medium">
                           <div className="flex space-x-2">
                             <Button
