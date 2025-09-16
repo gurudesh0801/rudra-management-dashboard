@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import CustomAlert from "@/components/ui/custom-alert";
 
 // Define types based on your Prisma schema
 type ProductWithRelations = Prisma.ProductGetPayload<{
@@ -47,6 +48,13 @@ type ProductWithRelations = Prisma.ProductGetPayload<{
     items: true;
   };
 }>;
+
+interface AlertState {
+  show: boolean;
+  type: "success" | "error" | "warning" | "info";
+  title: string;
+  message: string;
+}
 
 const ProductManagement = () => {
   const [products, setProducts] = useState<ProductWithRelations[]>([]);
@@ -57,11 +65,17 @@ const ProductManagement = () => {
   const [editProduct, setEditProduct] = useState<ProductWithRelations | null>(
     null
   );
+  const [addQuantityDialog, setAddQuantityDialog] = useState<number | null>(
+    null
+  );
+  const [quantityToAdd, setQuantityToAdd] = useState("");
+  const [quantityLoading, setQuantityLoading] = useState(false);
   const [editFormData, setEditFormData] = useState({
     name: "",
     size: "",
     price: "",
     category: "",
+    quantity: "0",
   });
   const [editLoading, setEditLoading] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
@@ -70,8 +84,15 @@ const ProductManagement = () => {
     size: "",
     price: "",
     category: "",
+    quantity: "0",
   });
   const [addLoading, setAddLoading] = useState(false);
+  const [alert, setAlert] = useState<AlertState>({
+    show: false,
+    type: "info",
+    title: "",
+    message: "",
+  });
 
   const categoryOptions = [
     "All",
@@ -98,6 +119,20 @@ const ProductManagement = () => {
   // Theme colors
   const themeColor = "#954C2E";
   const themeLight = "#F5E9E4";
+
+  // Show alert function
+  const showAlert = (
+    type: "success" | "error" | "warning" | "info",
+    title: string,
+    message: string
+  ) => {
+    setAlert({ show: true, type, title, message });
+  };
+
+  // Hide alert function
+  const hideAlert = () => {
+    setAlert({ ...alert, show: false });
+  };
 
   // Fetch products from API
   const fetchProducts = async () => {
@@ -126,6 +161,11 @@ const ProductManagement = () => {
     } catch (error) {
       console.error("Error fetching products:", error);
       setProducts([]);
+      showAlert(
+        "error",
+        "Error",
+        "Failed to fetch products. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -150,14 +190,15 @@ const ProductManagement = () => {
       if (response.ok) {
         setProducts(products.filter((product) => product.id !== id));
         setDeleteConfirm(null);
+        showAlert("success", "Success", "Product deleted successfully!");
       } else {
         const data = await response.json();
         console.error("Error deleting product:", data.error);
-        alert("Failed to delete product");
+        showAlert("error", "Error", data.error || "Failed to delete product");
       }
     } catch (error) {
       console.error("Error deleting product:", error);
-      alert("Failed to delete product");
+      showAlert("error", "Error", "Failed to delete product");
     }
   };
 
@@ -169,16 +210,45 @@ const ProductManagement = () => {
       size: product.size || "",
       price: product.price.toString(),
       category: product.category,
+      quantity: product.quantity.toString(),
     });
   };
 
-  // Handle edit form input changes
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setEditFormData({
-      ...editFormData,
-      [name]: value,
-    });
+  const handleAddQuantity = async (productId: number) => {
+    if (!quantityToAdd || parseInt(quantityToAdd) <= 0) {
+      showAlert("warning", "Invalid Input", "Please enter a valid quantity");
+      return;
+    }
+
+    setQuantityLoading(true);
+    try {
+      const response = await fetch(`/api/products/${productId}/quantity`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          quantityToAdd: parseInt(quantityToAdd),
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh the product list
+        fetchProducts();
+        setAddQuantityDialog(null);
+        setQuantityToAdd("");
+        showAlert("success", "Success", "Quantity added successfully!");
+      } else {
+        const data = await response.json();
+        console.error("Error adding quantity:", data.error);
+        showAlert("error", "Error", data.error || "Failed to add quantity");
+      }
+    } catch (error) {
+      console.error("Error adding quantity:", error);
+      showAlert("error", "Error", "Failed to add quantity");
+    } finally {
+      setQuantityLoading(false);
+    }
   };
 
   // Handle edit form submission
@@ -198,6 +268,7 @@ const ProductManagement = () => {
           size: editFormData.size,
           price: parseFloat(editFormData.price),
           category: editFormData.category,
+          quantity: parseInt(editFormData.quantity) || 0,
         }),
       });
 
@@ -205,27 +276,18 @@ const ProductManagement = () => {
         // Refresh the product list
         fetchProducts();
         setEditProduct(null);
-        alert("Product updated successfully!");
+        showAlert("success", "Success", "Product updated successfully!");
       } else {
         const data = await response.json();
         console.error("Error updating product:", data.error);
-        alert("Failed to update product");
+        showAlert("error", "Error", data.error || "Failed to update product");
       }
     } catch (error) {
       console.error("Error updating product:", error);
-      alert("Failed to update product");
+      showAlert("error", "Error", "Failed to update product");
     } finally {
       setEditLoading(false);
     }
-  };
-
-  // Handle add form input changes
-  const handleAddInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setAddFormData({
-      ...addFormData,
-      [name]: value,
-    });
   };
 
   // Handle add form submission
@@ -244,6 +306,7 @@ const ProductManagement = () => {
           size: addFormData.size,
           price: parseFloat(addFormData.price),
           category: addFormData.category,
+          quantity: parseInt(addFormData.quantity) || 0,
         }),
       });
 
@@ -256,28 +319,20 @@ const ProductManagement = () => {
           size: "",
           price: "",
           category: "",
+          quantity: "0",
         });
-        alert("Product added successfully!");
+        showAlert("success", "Success", "Product added successfully!");
       } else {
         const data = await response.json();
         console.error("Error adding product:", data.error);
-        alert("Failed to add product");
+        showAlert("error", "Error", data.error || "Failed to add product");
       }
     } catch (error) {
       console.error("Error adding product:", error);
-      alert("Failed to add product");
+      showAlert("error", "Error", "Failed to add product");
     } finally {
       setAddLoading(false);
     }
-  };
-
-  // Format date for display
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
   };
 
   // Format currency for display
@@ -307,6 +362,16 @@ const ProductManagement = () => {
   return (
     <DashboardLayout>
       <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Custom Alert */}
+        {alert.show && (
+          <CustomAlert
+            type={alert.type}
+            title={alert.title}
+            message={alert.message}
+            onClose={hideAlert}
+          />
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -456,14 +521,11 @@ const ProductManagement = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Quantity
                     </th>
-                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                      Created
-                    </th> */}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                       Actions
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                      Add quantity
                     </th>
                   </tr>
                 </thead>
@@ -491,14 +553,8 @@ const ProductManagement = () => {
                           {formatCurrency(product.price)}
                         </td>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          {}
+                          {product.quantity || 0}
                         </td>
-                        {/* <td className="px-4 py-3 text-sm text-gray-900">
-                          <Badge variant="secondary">{product.category}</Badge>
-                        </td> */}
-                        {/* <td className="px-4 py-3 text-sm text-gray-900">
-                          {formatDate(product.createdAt)}
-                        </td> */}
                         <td className="px-4 py-3 text-sm font-medium">
                           <div className="flex space-x-2">
                             <Button
@@ -545,6 +601,19 @@ const ProductManagement = () => {
                             </Button>
                           </div>
                         </td>
+                        <td className="px-4 py-3 text-sm font-medium">
+                          <Button
+                            onClick={() => setAddQuantityDialog(product.id)}
+                            variant="outline"
+                            size="sm"
+                            style={{
+                              backgroundColor: themeLight,
+                              borderColor: themeColor,
+                            }}
+                          >
+                            Add Quantity
+                          </Button>
+                        </td>
                       </motion.tr>
                     ))}
                   </AnimatePresence>
@@ -553,6 +622,60 @@ const ProductManagement = () => {
             </div>
           )}
         </Card>
+
+        {/* Add Quantity Dialog */}
+        <Dialog
+          open={!!addQuantityDialog}
+          onOpenChange={() => setAddQuantityDialog(null)}
+        >
+          <DialogContent className="sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle>Add Quantity</DialogTitle>
+              <DialogDescription>
+                Add quantity to the product. Current quantity:{" "}
+                {products.find((p) => p.id === addQuantityDialog)?.quantity ||
+                  0}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="quantity-to-add"
+                  className="text-sm font-medium"
+                >
+                  Quantity to Add
+                </Label>
+                <Input
+                  id="quantity-to-add"
+                  type="number"
+                  min="1"
+                  value={quantityToAdd}
+                  onChange={(e) => setQuantityToAdd(e.target.value)}
+                  placeholder="Enter quantity"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setAddQuantityDialog(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() =>
+                    addQuantityDialog && handleAddQuantity(addQuantityDialog)
+                  }
+                  disabled={quantityLoading}
+                  style={{ backgroundColor: themeColor }}
+                  className="text-white"
+                >
+                  {quantityLoading ? "Adding..." : "Add Quantity"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Add Product Dialog */}
         <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
@@ -575,7 +698,13 @@ const ProductManagement = () => {
                   name="name"
                   required
                   value={addFormData.name}
-                  onChange={handleAddInputChange}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setAddFormData({
+                      ...addFormData,
+                      [name]: value,
+                    });
+                  }}
                 />
               </div>
 
@@ -588,7 +717,13 @@ const ProductManagement = () => {
                   type="text"
                   name="size"
                   value={addFormData.size}
-                  onChange={handleAddInputChange}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setAddFormData({
+                      ...addFormData,
+                      [name]: value,
+                    });
+                  }}
                   placeholder="10 inch"
                 />
               </div>
@@ -605,8 +740,34 @@ const ProductManagement = () => {
                   min="0"
                   step="0.01"
                   value={addFormData.price}
-                  onChange={handleAddInputChange}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setAddFormData({
+                      ...addFormData,
+                      [name]: value,
+                    });
+                  }}
                   placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-quantity" className="text-sm font-medium">
+                  Initial Quantity
+                </Label>
+                <Input
+                  id="add-quantity"
+                  type="number"
+                  name="quantity"
+                  min="0"
+                  value={addFormData.quantity}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setAddFormData({
+                      ...addFormData,
+                      [name]: value,
+                    });
+                  }}
+                  placeholder="0"
                 />
               </div>
 
@@ -674,7 +835,13 @@ const ProductManagement = () => {
                   name="name"
                   required
                   value={editFormData.name}
-                  onChange={handleEditInputChange}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setEditFormData({
+                      ...editFormData,
+                      [name]: value,
+                    });
+                  }}
                 />
               </div>
 
@@ -687,7 +854,13 @@ const ProductManagement = () => {
                   type="text"
                   name="size"
                   value={editFormData.size}
-                  onChange={handleEditInputChange}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setEditFormData({
+                      ...editFormData,
+                      [name]: value,
+                    });
+                  }}
                 />
               </div>
 
@@ -703,7 +876,32 @@ const ProductManagement = () => {
                   min="0"
                   step="0.01"
                   value={editFormData.price}
-                  onChange={handleEditInputChange}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setEditFormData({
+                      ...editFormData,
+                      [name]: value,
+                    });
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-quantity" className="text-sm font-medium">
+                  Quantity
+                </Label>
+                <Input
+                  id="edit-quantity"
+                  type="number"
+                  name="quantity"
+                  min="0"
+                  value={editFormData.quantity}
+                  onChange={(e) => {
+                    const { name, value } = e.target;
+                    setEditFormData({
+                      ...editFormData,
+                      [name]: value,
+                    });
+                  }}
                 />
               </div>
 

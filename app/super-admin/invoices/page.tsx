@@ -103,28 +103,50 @@ const Invoices = () => {
   const [generatePdf, setGeneratePdf] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState<string>("");
   const [isLoadingInvoiceNumber, setIsLoadingInvoiceNumber] = useState(true);
+  const [productStock, setProductStock] = useState<{ [key: number]: number }>(
+    {}
+  );
 
   // Fetch next invoice number from API
-  const fetchNextInvoiceNumber = async () => {
-    try {
-      setIsLoadingInvoiceNumber(true);
-      const res = await fetch("/api/invoices/next-number");
-      if (!res.ok) throw new Error("Failed to fetch next invoice number");
+  // const fetchNextInvoiceNumber = async () => {
+  //   try {
+  //     setIsLoadingInvoiceNumber(true);
+  //     const res = await fetch("/api/invoices/next-number");
+  //     if (!res.ok) throw new Error("Failed to fetch next invoice number");
 
-      const data = await res.json();
-      setInvoiceNumber(data.nextInvoiceNumber);
-    } catch (error: any) {
-      console.error("Failed to fetch next invoice number:", error);
-      // Fallback to generating a temporary number
-      // setInvoiceNumber(
-      //   `INV-${new Date().getFullYear()}-${Math.floor(
-      //     1000 + Math.random() * 9000
-      //   )}`
-      // );
-    } finally {
-      setIsLoadingInvoiceNumber(false);
-    }
-  };
+  //     const data = await res.json();
+  //     setInvoiceNumber(data.nextInvoiceNumber);
+  //   } catch (error: any) {
+  //     console.error("Failed to fetch next invoice number:", error);
+  //     // Fallback to generating a temporary number
+  //     // setInvoiceNumber(
+  //     //   `INV-${new Date().getFullYear()}-${Math.floor(
+  //     //     1000 + Math.random() * 9000
+  //     //   )}`
+  //     // );
+  //   } finally {
+  //     setIsLoadingInvoiceNumber(false);
+  //   }
+  // };
+
+  // const fetchProductStock = async (productId: number) => {
+  //   try {
+  //     const response = await fetch(`/api/products/${productId}`);
+  //     if (!response.ok) throw new Error("Failed to fetch product");
+
+  //     const product = await response.json();
+  //     console.log(product, "product stock");
+  //     setProductStock((prev) => ({
+  //       ...prev,
+  //       [productId]: product.quantity,
+  //     }));
+
+  //     return product.quantity;
+  //   } catch (error) {
+  //     console.error("Error fetching product stock:", error);
+  //     return 0;
+  //   }
+  // };
 
   // Save Invoice to API
   const saveInvoice = async (status: "DRAFT" | "FINAL" | "PAID") => {
@@ -184,7 +206,7 @@ const Invoices = () => {
       );
 
       // Fetch the next invoice number for future use
-      fetchNextInvoiceNumber();
+      // fetchNextInvoiceNumber();
 
       return result;
     } catch (error: any) {
@@ -202,6 +224,40 @@ const Invoices = () => {
       );
       throw error;
     }
+  };
+
+  const checkProductAvailability = async () => {
+    const availabilityChecks = items.map(async (item) => {
+      try {
+        const response = await fetch(`/api/products/${item.productId}`);
+        if (!response.ok) throw new Error("Failed to fetch product");
+
+        const product = await response.json();
+
+        return {
+          productId: item.productId,
+          productName: item.name,
+          available: product.quantity,
+          requested: item.quantity,
+          isAvailable: product.quantity >= item.quantity,
+        };
+      } catch (error) {
+        console.error(
+          `Error checking availability for product ${item.productId}:`,
+          error
+        );
+        return {
+          productId: item.productId,
+          productName: item.name,
+          available: 0,
+          requested: item.quantity,
+          isAvailable: false,
+          error: true,
+        };
+      }
+    });
+
+    return Promise.all(availabilityChecks);
   };
 
   const calculateDiscountedPrice = (
@@ -224,6 +280,25 @@ const Invoices = () => {
         const data = await res.json();
         setProductsData(data);
         setFilteredProducts(data);
+
+        // Fetch quantities for all products
+        const stockData: { [key: number]: number } = {};
+        for (const product of data) {
+          try {
+            const response = await fetch(`/api/products/${product.id}`);
+            if (response.ok) {
+              const productData = await response.json();
+              stockData[product.id] = productData.quantity;
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching quantity for product ${product.id}:`,
+              error
+            );
+            stockData[product.id] = 0; // Default to 0 if there's an error
+          }
+        }
+        setProductStock(stockData);
 
         // Show info alert if no products found
         if (data.length === 0) {
@@ -260,7 +335,7 @@ const Invoices = () => {
     fetchProducts();
 
     // Fetch the next invoice number
-    fetchNextInvoiceNumber();
+    // fetchNextInvoiceNumber();
   }, []);
 
   // Filter products based on search query
@@ -322,8 +397,25 @@ const Invoices = () => {
   };
 
   // Add item to invoice
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!selectedProduct || quantity < 1) return;
+
+    // Check if enough quantity is available
+    const isAvailable = await checkQuantityBeforeAdd(
+      selectedProduct.id,
+      quantity
+    );
+
+    if (!isAvailable) {
+      alert.error(
+        "Insufficient Stock",
+        `Not enough quantity available for ${selectedProduct.name}. Please check the current stock.`,
+        {
+          duration: 6000,
+        }
+      );
+      return;
+    }
 
     const originalPrice = selectedProduct.price;
     let finalPrice = originalPrice;
@@ -387,6 +479,32 @@ const Invoices = () => {
   // Handle final invoice generation
   const handleGenerateInvoice = async () => {
     try {
+      // First check if all products have sufficient quantity
+      const availabilityResults = await checkProductAvailability();
+      const insufficientProducts = availabilityResults.filter(
+        (result) => !result.isAvailable
+      );
+
+      if (insufficientProducts.length > 0) {
+        // Show error message with details
+        const errorMessage = insufficientProducts
+          .map(
+            (product) =>
+              `• ${product.productName}: Available ${product.available}, Requested ${product.requested}`
+          )
+          .join("\n");
+
+        alert.error(
+          "Insufficient Stock",
+          `The following products don't have enough quantity:\n${errorMessage}`,
+          {
+            duration: 10000,
+          }
+        );
+        return;
+      }
+
+      // Proceed with invoice generation
       const status = getInvoiceStatus();
       const result = await saveInvoice(status);
 
@@ -404,6 +522,7 @@ const Invoices = () => {
         amount: item.total,
       }));
 
+      // Generate PDF
       const blob = await pdf(
         <InvoicePDF
           invoiceData={{
@@ -447,7 +566,6 @@ const Invoices = () => {
             advancePaid: advancePayment,
             notes: "",
             previousDue: 0,
-            // Add discount information
             discountDetails: {
               hasDiscount: items.some(
                 (item) => item.discount && item.discount > 0
@@ -459,7 +577,6 @@ const Invoices = () => {
               itemsWithDiscount: items
                 .filter((item) => item.discount && item.discount > 0)
                 .map((item) => ({
-                  // Map to the expected format
                   name: item.name,
                   hsn: item.hsn || "970300",
                   quantity: item.quantity,
@@ -503,8 +620,28 @@ const Invoices = () => {
           }
         );
       }
+
+      // Clear the form after successful invoice generation
+      setItems([]);
+      setAdvancePayment(0);
     } catch (error) {
       console.error("Failed to generate invoice:", error);
+    }
+  };
+
+  const checkQuantityBeforeAdd = async (
+    productId: number,
+    quantity: number
+  ) => {
+    try {
+      const response = await fetch(`/api/products/${productId}`);
+      if (!response.ok) throw new Error("Failed to fetch product");
+
+      const product = await response.json();
+      return product.quantity >= quantity;
+    } catch (error) {
+      console.error("Error checking quantity:", error);
+      return false;
     }
   };
 
@@ -658,11 +795,19 @@ const Invoices = () => {
                               setSelectedProduct(product);
                               setSearchQuery("");
                             }}
-                            className="px-4 py-2 cursor-pointer hover:bg-blue-50 flex justify-between"
+                            className="px-4 py-2 cursor-pointer hover:bg-blue-50 flex justify-between items-center"
                           >
-                            <span>
-                              {product.name} {product.size}
-                            </span>
+                            <div>
+                              <span>
+                                {product.name} {product.size}
+                              </span>
+                              <span className="block text-xs text-gray-500">
+                                Stock:{" "}
+                                {productStock[product.id] !== undefined
+                                  ? productStock[product.id]
+                                  : "Loading..."}
+                              </span>
+                            </div>
                             <span className="text-blue-600">
                               ₹{product.price}
                             </span>

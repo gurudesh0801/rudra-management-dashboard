@@ -2,14 +2,54 @@ import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { generateInvoiceNumber } from "@/utils/invoiceNumberGenerator";
 
-const prisma = new PrismaClient(); // ✅ Create an instance
+const prisma = new PrismaClient();
+
+// Function to update product quantities
+const updateProductQuantities = async (items: any[]) => {
+  const updates = items.map(async (item) => {
+    try {
+      // Get current product
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+
+      if (!product) {
+        throw new Error(`Product with ID ${item.productId} not found`);
+      }
+
+      // Check if enough quantity is available
+      if (product.quantity < item.quantity) {
+        throw new Error(
+          `Insufficient quantity for ${product.name}. Available: ${product.quantity}, Requested: ${item.quantity}`
+        );
+      }
+
+      // Update quantity
+      const updatedProduct = await prisma.product.update({
+        where: { id: item.productId },
+        data: {
+          quantity: product.quantity - item.quantity,
+        },
+      });
+
+      return updatedProduct;
+    } catch (error) {
+      console.error(
+        `Error updating quantity for product ${item.productId}:`,
+        error
+      );
+      throw error;
+    }
+  });
+
+  return Promise.all(updates);
+};
 
 // ✅ Create or update invoice (DRAFT or FINAL)
 export async function POST(req: Request) {
   try {
     const data = await req.json();
     const {
-      // Remove invoiceNumber from destructuring as we'll generate it
       invoiceDate,
       dueDate,
       customerInfo,
@@ -43,7 +83,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Rest of your existing code...
     // Create Shipping Info (if provided)
     let shipping = null;
     if (shippingInfo?.address) {
@@ -56,10 +95,15 @@ export async function POST(req: Request) {
       });
     }
 
+    // Update product quantities (only for FINAL or PAID invoices)
+    if (status === "FINAL" || status === "PAID") {
+      await updateProductQuantities(items);
+    }
+
     // Create Invoice
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber, // Use the generated invoice number
+        invoiceNumber,
         invoiceDate: new Date(invoiceDate),
         dueDate: new Date(dueDate),
         customerId: customer.id,
@@ -84,6 +128,9 @@ export async function POST(req: Request) {
             notes: item.notes || "",
           })),
         },
+      },
+      include: {
+        items: true,
       },
     });
 
@@ -132,6 +179,33 @@ export async function DELETE(req: Request) {
       );
     }
 
+    // First, get the invoice with items to restore quantities
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: Number(id) },
+      include: { items: true },
+    });
+
+    if (!invoice) {
+      return NextResponse.json(
+        { success: false, error: "Invoice not found" },
+        { status: 404 }
+      );
+    }
+
+    // Restore product quantities if invoice was FINAL or PAID
+    if (invoice.status === "FINAL" || invoice.status === "PAID") {
+      for (const item of invoice.items) {
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: {
+            quantity: {
+              increment: item.quantity,
+            },
+          },
+        });
+      }
+    }
+
     // First delete items related to the invoice
     await prisma.invoiceItem.deleteMany({
       where: { invoiceId: Number(id) },
@@ -167,6 +241,63 @@ export async function PUT(req: Request) {
     const body = await req.json();
     const { customer, remaining, status } = body;
 
+    // Get the current invoice to check status changes
+    const currentInvoice = await prisma.invoice.findUnique({
+      where: { id: Number(id) },
+      include: { items: true },
+    });
+
+    if (!currentInvoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    // Handle status changes that affect inventory
+    if (currentInvoice.status !== status) {
+      // If changing from DRAFT to FINAL/PAID, deduct quantities
+      if (
+        currentInvoice.status === "DRAFT" &&
+        (status === "FINAL" || status === "PAID")
+      ) {
+        for (const item of currentInvoice.items) {
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+          });
+
+          if (product && product.quantity < item.quantity) {
+            throw new Error(
+              `Insufficient quantity for ${product.name}. Available: ${product.quantity}, Requested: ${item.quantity}`
+            );
+          }
+
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: {
+              quantity: {
+                decrement: item.quantity,
+              },
+            },
+          });
+        }
+      }
+      // If changing from FINAL/PAID to DRAFT, restore quantities
+      else if (
+        (currentInvoice.status === "FINAL" ||
+          currentInvoice.status === "PAID") &&
+        status === "DRAFT"
+      ) {
+        for (const item of currentInvoice.items) {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: {
+              quantity: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+      }
+    }
+
     const updatedInvoice = await prisma.invoice.update({
       where: { id: Number(id) },
       data: {
@@ -181,7 +312,7 @@ export async function PUT(req: Request) {
             }
           : undefined,
       },
-      include: { customer: true },
+      include: { customer: true, items: true },
     });
 
     return NextResponse.json(updatedInvoice);

@@ -4,7 +4,15 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { Eye, Pencil, Trash2, Search, FileText, Plus } from "lucide-react";
+import {
+  Eye,
+  Pencil,
+  Trash2,
+  Search,
+  FileText,
+  Plus,
+  Download,
+} from "lucide-react";
 import { toast } from "sonner";
 
 // Import shadcn components
@@ -54,6 +62,9 @@ type InvoiceWithRelations = Prisma.InvoiceGetPayload<{
 
 const InvoiceManagement = () => {
   const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([]);
+  const [filteredInvoices, setFilteredInvoices] = useState<
+    InvoiceWithRelations[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -92,10 +103,12 @@ const InvoiceManagement = () => {
 
       const data = await response.json();
       setInvoices(data);
+      setFilteredInvoices(data); // Initialize filtered invoices with all invoices
     } catch (error) {
       console.error("Error fetching invoices:", error);
       // Set empty array instead of showing error for better UX
       setInvoices([]);
+      setFilteredInvoices([]);
       toast.error("Failed to fetch invoices", {
         description: "Please try again later.",
       });
@@ -118,6 +131,9 @@ const InvoiceManagement = () => {
       if (response.ok) {
         // Remove the deleted invoice from state
         setInvoices(invoices.filter((invoice) => invoice.id !== id));
+        setFilteredInvoices(
+          filteredInvoices.filter((invoice) => invoice.id !== id)
+        );
         setDeleteConfirm(null);
         toast.success("Invoice deleted successfully", {
           description: "The invoice has been permanently removed.",
@@ -171,6 +187,82 @@ const InvoiceManagement = () => {
         return "destructive";
       default:
         return "secondary";
+    }
+  };
+
+  // Export filtered invoices to Excel
+  // Export filtered invoices to Excel with additional summary row
+  const exportToExcel = () => {
+    if (filteredInvoices.length === 0) {
+      toast.info("No data to export", {
+        description: "There are no invoices matching your current filters.",
+      });
+      return;
+    }
+
+    try {
+      // Create CSV content
+      let csvContent =
+        "Invoice Number,Customer Name,Customer Phone,Date,Due Date,Total Amount,Advance Paid,Balance Due,Status\n";
+
+      // Calculate overall totals
+      let overallTotal = 0;
+      let overallAdvancePaid = 0;
+      let overallBalanceDue = 0;
+
+      filteredInvoices.forEach((invoice) => {
+        let balanceDue = invoice.total - invoice.advancePaid;
+
+        if (invoice.advancePaid <= 0) {
+          balanceDue = 0;
+        }
+
+        // Add to overall totals
+        overallTotal += invoice.total;
+        overallAdvancePaid += invoice.advancePaid;
+        overallBalanceDue += balanceDue;
+
+        const row = [
+          `"${invoice.invoiceNumber}"`,
+          `"${invoice.customer.name}"`,
+          `"${invoice.customer.number}"`,
+          `"${formatDate(invoice.invoiceDate)}"`,
+          `"${formatDate(invoice.dueDate)}"`,
+          `"${invoice.total}"`,
+          `"${invoice.advancePaid}"`,
+          `"${balanceDue}"`,
+          `"${invoice.status}"`,
+        ].join(",");
+
+        csvContent += row + "\n";
+      });
+
+      // Add summary row
+      csvContent += "\n";
+      csvContent += `"","","","","","TOTAL: ${overallTotal}","ADVANCE: ${overallAdvancePaid}","BALANCE: ${overallBalanceDue}",""\n`;
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const fileName = `invoices-${new Date().toISOString().split("T")[0]}.csv`;
+
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = "hidden";
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Export successful", {
+        description: `${filteredInvoices.length} invoice(s) exported to CSV with summary.`,
+      });
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      toast.error("Export failed", {
+        description: "An error occurred while exporting the data.",
+      });
     }
   };
 
@@ -228,7 +320,17 @@ const InvoiceManagement = () => {
                 </Select>
               </div>
 
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
+                <Button
+                  onClick={exportToExcel}
+                  variant="outline"
+                  className="border-green-600 text-green-700 hover:bg-green-50"
+                  disabled={filteredInvoices.length === 0}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Statement
+                </Button>
+
                 <Button
                   onClick={() => router.push("/super-admin/invoices")}
                   style={{ backgroundColor: themeColor }}
@@ -247,7 +349,10 @@ const InvoiceManagement = () => {
           <CardHeader>
             <CardTitle>Invoices</CardTitle>
             <CardDescription>
-              {invoices.length} invoice{invoices.length !== 1 ? "s" : ""} found
+              {filteredInvoices.length} invoice
+              {filteredInvoices.length !== 1 ? "s" : ""} found
+              {filteredInvoices.length !== invoices.length &&
+                ` (filtered from ${invoices.length} total)`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -263,11 +368,11 @@ const InvoiceManagement = () => {
                   </div>
                 ))}
               </div>
-            ) : invoices.length === 0 ? (
+            ) : filteredInvoices.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="mx-auto h-12 w-12 text-gray-400" />
                 <h3 className="mt-4 text-lg font-semibold text-gray-900">
-                  No invoices
+                  No invoices found
                 </h3>
                 <p className="mt-2 text-sm text-gray-500">
                   {searchTerm || statusFilter !== "ALL"
@@ -276,7 +381,7 @@ const InvoiceManagement = () => {
                 </p>
                 <div className="mt-6">
                   <Button
-                    onClick={() => router.push("/super-admin/invoices/create")}
+                    onClick={() => router.push("/super-admin/invoices")}
                     style={{ backgroundColor: themeColor }}
                     className="hover:opacity-90"
                   >
@@ -299,7 +404,7 @@ const InvoiceManagement = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
+                  {filteredInvoices.map((invoice) => (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">
                         {invoice.invoiceNumber}
