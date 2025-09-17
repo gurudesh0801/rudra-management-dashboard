@@ -41,6 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import CustomAlert from "@/components/ui/custom-alert";
+import { Delete } from "lucide-react";
 
 // Define types based on your Prisma schema
 type ProductWithRelations = Prisma.ProductGetPayload<{
@@ -968,6 +969,7 @@ const ProductManagement = () => {
                 onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
+                <Delete className="w-4 h-4" />
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
