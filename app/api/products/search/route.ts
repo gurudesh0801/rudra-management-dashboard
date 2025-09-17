@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     const products = await prisma.product.findMany({
       where: whereClause,
-      orderBy: { createdAt: "desc" },
+      orderBy: { id: "asc" }, // Changed to sort by ID
       include: {
         items: true,
       },
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, size, price, category } = body;
+    const { name, size, price, category, quantity } = body;
 
     // Validate required fields
     if (!name || !price || !category) {
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         size: size || null,
         price: parseFloat(price),
         category,
+        quantity: quantity ? parseInt(quantity) : 0,
       },
     });
 

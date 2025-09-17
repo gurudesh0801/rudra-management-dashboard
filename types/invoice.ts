@@ -48,4 +48,9 @@ export interface InvoiceData {
   status?: string;
   totalInWords: string;
   deliveryDate: string;
+  discountDetails: {
+    hasDiscount: boolean;
+    totalDiscount: number;
+    itemsWithDiscount: InvoiceItem[];
+  };
 }

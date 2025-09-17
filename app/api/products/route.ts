@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 export async function GET() {
   try {
     const products = await prisma.product.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { id: "asc" }, // Changed to sort by ID
     });
     return NextResponse.json(products);
   } catch (error) {
@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, price, description, size, category } = body;
+    const { name, price, description, size, category, quantity } = body;
 
     if (!name || !price || !category) {
       return NextResponse.json(
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     const newProduct = await prisma.product.create({
-      data: { name, price, size, category },
+      data: { name, price, size, category, quantity: quantity || 0 },
     });
 
     return NextResponse.json(newProduct, { status: 201 });

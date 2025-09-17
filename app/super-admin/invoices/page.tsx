@@ -47,8 +47,10 @@ interface InvoiceItem {
   name: string;
   quantity: number;
   price: number;
+  originalPrice: number;
   total: number;
-  discount?: number; // default 0 if not applied
+  discount?: number;
+  discountedPrice?: number;
   hsn?: string;
   unit?: string;
   description?: string;
@@ -57,9 +59,9 @@ interface InvoiceItem {
 
 interface CustomerInfo {
   name: string;
-  number: string; // phone number
+  number: string;
   address: string;
-  city?: string; // optional if not always provided
+  city?: string;
   pincode?: string;
   gstin?: string;
 }
@@ -83,6 +85,8 @@ const Invoices = () => {
 
   // State for advance payment
   const [advancePayment, setAdvancePayment] = useState<number>(0);
+  const [applyDiscount, setApplyDiscount] = useState<boolean>(false);
+  const [discountPercentage, setDiscountPercentage] = useState<number>(0);
 
   // State for GST
   const [includeGst, setIncludeGst] = useState<boolean>(true);
@@ -97,12 +101,58 @@ const Invoices = () => {
 
   const [productsData, setProductsData] = useState<Product[]>([]);
   const [generatePdf, setGeneratePdf] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState<string>("");
+  const [isLoadingInvoiceNumber, setIsLoadingInvoiceNumber] = useState(true);
+  const [productStock, setProductStock] = useState<{ [key: number]: number }>(
+    {}
+  );
+
+  // Fetch next invoice number from API
+  // const fetchNextInvoiceNumber = async () => {
+  //   try {
+  //     setIsLoadingInvoiceNumber(true);
+  //     const res = await fetch("/api/invoices/next-number");
+  //     if (!res.ok) throw new Error("Failed to fetch next invoice number");
+
+  //     const data = await res.json();
+  //     setInvoiceNumber(data.nextInvoiceNumber);
+  //   } catch (error: any) {
+  //     console.error("Failed to fetch next invoice number:", error);
+  //     // Fallback to generating a temporary number
+  //     // setInvoiceNumber(
+  //     //   `INV-${new Date().getFullYear()}-${Math.floor(
+  //     //     1000 + Math.random() * 9000
+  //     //   )}`
+  //     // );
+  //   } finally {
+  //     setIsLoadingInvoiceNumber(false);
+  //   }
+  // };
+
+  // const fetchProductStock = async (productId: number) => {
+  //   try {
+  //     const response = await fetch(`/api/products/${productId}`);
+  //     if (!response.ok) throw new Error("Failed to fetch product");
+
+  //     const product = await response.json();
+  //     console.log(product, "product stock");
+  //     setProductStock((prev) => ({
+  //       ...prev,
+  //       [productId]: product.quantity,
+  //     }));
+
+  //     return product.quantity;
+  //   } catch (error) {
+  //     console.error("Error fetching product stock:", error);
+  //     return 0;
+  //   }
+  // };
 
   // Save Invoice to API
-  const saveInvoice = async (status: "DRAFT" | "FINAL") => {
+  const saveInvoice = async (status: "DRAFT" | "FINAL" | "PAID") => {
     try {
       const invoiceData = {
-        invoiceNumber,
+        invoiceNumber, // Include the invoice number from state
         invoiceDate: new Date().toISOString(),
         dueDate: new Date().toISOString(),
         customerInfo,
@@ -134,27 +184,33 @@ const Invoices = () => {
       });
 
       const result = await res.json();
+
+      console.log(result, "result after saving invoice");
+
+      setInvoiceNumber(result.invoice.invoiceNumber);
       if (!res.ok) throw new Error(result.error || "Failed to save invoice");
 
-      // Success alert
+      // Success alert - use the invoice number from the response
       alert.success(
         `Invoice ${status} saved successfully!`,
-        `Invoice number: ${invoiceNumber}`,
+        `Invoice number: ${result.invoice.invoiceNumber}`,
         {
           duration: 6000,
           action: {
             label: "View Invoices",
             onClick: () => {
-              // Navigate to invoices list
-              window.location.href = "/dashboard/invoices";
+              window.location.href = "/super-admin/invoicemanagement";
             },
           },
         }
       );
+
+      // Fetch the next invoice number for future use
+      // fetchNextInvoiceNumber();
+
+      return result;
     } catch (error: any) {
       console.error("❌ Error saving invoice:", error);
-
-      // Error alert
       alert.error(
         "Failed to save invoice",
         error.message || "Please try again later",
@@ -166,7 +222,52 @@ const Invoices = () => {
           },
         }
       );
+      throw error;
     }
+  };
+
+  const checkProductAvailability = async () => {
+    const availabilityChecks = items.map(async (item) => {
+      try {
+        const response = await fetch(`/api/products/${item.productId}`);
+        if (!response.ok) throw new Error("Failed to fetch product");
+
+        const product = await response.json();
+
+        return {
+          productId: item.productId,
+          productName: item.name,
+          available: product.quantity,
+          requested: item.quantity,
+          isAvailable: product.quantity >= item.quantity,
+        };
+      } catch (error) {
+        console.error(
+          `Error checking availability for product ${item.productId}:`,
+          error
+        );
+        return {
+          productId: item.productId,
+          productName: item.name,
+          available: 0,
+          requested: item.quantity,
+          isAvailable: false,
+          error: true,
+        };
+      }
+    });
+
+    return Promise.all(availabilityChecks);
+  };
+
+  const calculateDiscountedPrice = (
+    price: number,
+    percentage: number,
+    quantity: number
+  ) => {
+    const discountAmount = (price * percentage) / 100;
+    const finalPrice = price - discountAmount;
+    return finalPrice * quantity;
   };
 
   // Fetch products from API
@@ -179,6 +280,25 @@ const Invoices = () => {
         const data = await res.json();
         setProductsData(data);
         setFilteredProducts(data);
+
+        // Fetch quantities for all products
+        const stockData: { [key: number]: number } = {};
+        for (const product of data) {
+          try {
+            const response = await fetch(`/api/products/${product.id}`);
+            if (response.ok) {
+              const productData = await response.json();
+              stockData[product.id] = productData.quantity;
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching quantity for product ${product.id}:`,
+              error
+            );
+            stockData[product.id] = 0; // Default to 0 if there's an error
+          }
+        }
+        setProductStock(stockData);
 
         // Show info alert if no products found
         if (data.length === 0) {
@@ -213,6 +333,9 @@ const Invoices = () => {
       }
     };
     fetchProducts();
+
+    // Fetch the next invoice number
+    // fetchNextInvoiceNumber();
   }, []);
 
   // Filter products based on search query
@@ -237,6 +360,11 @@ const Invoices = () => {
   const total = subtotal + gstTotal;
   const advanceAmount = total - advancePayment;
   const balance = total - advanceAmount;
+
+  // Determine invoice status based on advance payment
+  const getInvoiceStatus = (): "DRAFT" | "PAID" => {
+    return advancePayment > 0 ? "DRAFT" : "PAID";
+  };
 
   // Handle customer info change
   const handleCustomerInfoChange = (
@@ -269,21 +397,52 @@ const Invoices = () => {
   };
 
   // Add item to invoice
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!selectedProduct || quantity < 1) return;
+
+    // Check if enough quantity is available
+    const isAvailable = await checkQuantityBeforeAdd(
+      selectedProduct.id,
+      quantity
+    );
+
+    if (!isAvailable) {
+      alert.error(
+        "Insufficient Stock",
+        `Not enough quantity available for ${selectedProduct.name}. Please check the current stock.`,
+        {
+          duration: 6000,
+        }
+      );
+      return;
+    }
+
+    const originalPrice = selectedProduct.price;
+    let finalPrice = originalPrice;
+    let discountAmount = 0;
+
+    if (applyDiscount && discountPercentage > 0) {
+      discountAmount = (originalPrice * discountPercentage) / 100;
+      finalPrice = originalPrice - discountAmount;
+    }
 
     const newItem: InvoiceItem = {
       productId: selectedProduct.id,
       name: selectedProduct.name,
       quantity,
-      price: selectedProduct.price,
-      total: selectedProduct.price * quantity,
+      price: finalPrice,
+      originalPrice: originalPrice,
+      total: finalPrice * quantity,
+      discount: applyDiscount ? discountPercentage : 0,
+      discountedPrice: applyDiscount ? discountAmount * quantity : 0,
     };
 
     setItems([...items, newItem]);
     setSelectedProduct(null);
     setQuantity(1);
     setSearchQuery("");
+    setApplyDiscount(false);
+    setDiscountPercentage(0);
   };
 
   // Remove item from invoice
@@ -297,11 +456,6 @@ const Invoices = () => {
   const handlePrint = () => {
     window.print();
   };
-
-  // Generate invoice number (for demo purposes)
-  const invoiceNumber = `INV-${new Date().getFullYear()}-${Math.floor(
-    1000 + Math.random() * 9000
-  )}`;
 
   // Get current date
   const invoiceDate = new Date().toLocaleDateString("en-IN", {
@@ -320,14 +474,184 @@ const Invoices = () => {
     email: "rudraarts30@gmail.com",
   };
 
+  console.log(invoiceNumber, "invoiceNumber");
+
+  // Handle final invoice generation
+  const handleGenerateInvoice = async () => {
+    try {
+      // First check if all products have sufficient quantity
+      const availabilityResults = await checkProductAvailability();
+      const insufficientProducts = availabilityResults.filter(
+        (result) => !result.isAvailable
+      );
+
+      if (insufficientProducts.length > 0) {
+        // Show error message with details
+        const errorMessage = insufficientProducts
+          .map(
+            (product) =>
+              `• ${product.productName}: Available ${product.available}, Requested ${product.requested}`
+          )
+          .join("\n");
+
+        alert.error(
+          "Insufficient Stock",
+          `The following products don't have enough quantity:\n${errorMessage}`,
+          {
+            duration: 10000,
+          }
+        );
+        return;
+      }
+
+      // Proceed with invoice generation
+      const status = getInvoiceStatus();
+      const result = await saveInvoice(status);
+
+      // Map your items to the expected InvoiceItem format
+      const mappedItems = items.map((item) => ({
+        name: item.name,
+        hsn: item.hsn || "970300",
+        quantity: item.quantity,
+        unit: item.unit || "pcs",
+        rate: item.price,
+        originalPrice: item.originalPrice,
+        discount: item.discount || 0,
+        cgst: 6,
+        sgst: 6,
+        amount: item.total,
+      }));
+
+      // Generate PDF
+      const blob = await pdf(
+        <InvoicePDF
+          invoiceData={{
+            companyDetails,
+            invoiceNumber: result.invoice.invoiceNumber,
+            invoiceDate,
+            dueDate: invoiceDate,
+            customerInfo: {
+              name: customerInfo.name || "",
+              address: customerInfo.address || "",
+              city: customerInfo.city || "",
+              pincode: customerInfo.pincode || "",
+              gstin: customerInfo.gstin || "",
+            },
+            shippingInfo: shippingInfo.address
+              ? {
+                  name: customerInfo.name,
+                  address: customerInfo.address,
+                  city: customerInfo.city ?? "",
+                  pincode: customerInfo.pincode ?? "",
+                  gstin: customerInfo.gstin ?? "",
+                }
+              : {
+                  name: customerInfo.name || "",
+                  address: customerInfo.address || "",
+                  city: customerInfo.city || "",
+                  pincode: customerInfo.pincode || "",
+                  gstin: customerInfo.gstin || "",
+                },
+            items: mappedItems,
+            subtotal,
+            cgst,
+            sgst,
+            total,
+            totalInWords: `${convertToWords(subtotal)} Only`,
+            deliveryDate: new Date().toLocaleDateString("en-IN", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }),
+            advancePaid: advancePayment,
+            notes: "",
+            previousDue: 0,
+            discountDetails: {
+              hasDiscount: items.some(
+                (item) => item.discount && item.discount > 0
+              ),
+              totalDiscount: items.reduce(
+                (sum, item) => sum + (item.discountedPrice || 0),
+                0
+              ),
+              itemsWithDiscount: items
+                .filter((item) => item.discount && item.discount > 0)
+                .map((item) => ({
+                  name: item.name,
+                  hsn: item.hsn || "970300",
+                  quantity: item.quantity,
+                  unit: item.unit || "pcs",
+                  rate: item.price,
+                  originalPrice: item.originalPrice,
+                  discount: item.discount || 0,
+                  cgst: 6,
+                  sgst: 6,
+                  amount: item.total,
+                })),
+            },
+          }}
+          logoUrl="/images/logo.png"
+        />
+      ).toBlob();
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${result.invoice.invoiceNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Show status-specific message
+      if (status === "DRAFT") {
+        alert.info(
+          "Invoice saved as DRAFT",
+          "Advance payment received. Invoice marked as DRAFT until full payment.",
+          {
+            duration: 8000,
+          }
+        );
+      } else {
+        alert.success(
+          "Invoice marked as PAID",
+          "Full payment received. Invoice is now complete.",
+          {
+            duration: 6000,
+          }
+        );
+      }
+
+      // Clear the form after successful invoice generation
+      setItems([]);
+      setAdvancePayment(0);
+    } catch (error) {
+      console.error("Failed to generate invoice:", error);
+    }
+  };
+
+  const checkQuantityBeforeAdd = async (
+    productId: number,
+    quantity: number
+  ) => {
+    try {
+      const response = await fetch(`/api/products/${productId}`);
+      if (!response.ok) throw new Error("Failed to fetch product");
+
+      const product = await response.json();
+      return product.quantity >= quantity;
+    } catch (error) {
+      console.error("Error checking quantity:", error);
+      return false;
+    }
+  };
+
   return (
     <DashboardLayout>
       <AlertToaster />
       <div className="container mx-auto p-4 space-y-6 font-open-sans">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-semibold flex items-center text-[#954C2E] font-open-sans">
-            <ReceiptIndianRupee className="mr-2 h-8 w-8" />{" "}
-            {/* Increased size */}
+            <ReceiptIndianRupee className="mr-2 h-8 w-8" />
             Create Invoice
           </h1>
           <div className="flex space-x-2">
@@ -341,81 +665,41 @@ const Invoices = () => {
             </Button>
             <Button
               className="flex-1 bg-[#954C2E] hover:bg-[#734d26] text-white font-open-sans"
-              onClick={async () => {
-                await saveInvoice("FINAL");
-
-                const blob = await pdf(
-                  <InvoicePDF
-                    invoiceData={{
-                      companyDetails,
-                      invoiceNumber,
-                      invoiceDate,
-                      dueDate: invoiceDate,
-                      customerInfo: {
-                        name: customerInfo.name || "",
-                        address: customerInfo.address || "",
-                        city: customerInfo.city || "",
-                        pincode: customerInfo.pincode || "",
-                        gstin: customerInfo.gstin || "",
-                      },
-                      shippingInfo: shippingInfo.address
-                        ? {
-                            name: customerInfo.name,
-                            address: customerInfo.address,
-                            city: customerInfo.city ?? "",
-                            pincode: customerInfo.pincode ?? "",
-                            gstin: customerInfo.gstin ?? "",
-                          }
-                        : {
-                            name: customerInfo.name || "",
-                            address: customerInfo.address || "",
-                            city: customerInfo.city || "",
-                            pincode: customerInfo.pincode || "",
-                            gstin: customerInfo.gstin || "",
-                          },
-                      items: items.map((item) => ({
-                        name: item.name,
-                        hsn: "970300",
-                        quantity: item.quantity,
-                        unit: "pcs",
-                        rate: item.price,
-                        cgst: 6,
-                        sgst: 6,
-                        amount: item.total,
-                        discount: item.discount ?? 0,
-                      })),
-                      subtotal,
-                      cgst,
-                      sgst,
-                      total,
-                      totalInWords: `${convertToWords(total)} Only`,
-                      deliveryDate: new Date().toLocaleDateString("en-IN", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      }),
-                      advancePaid: advancePayment,
-                      notes: "",
-                      previousDue: 0,
-                    }}
-                    logoUrl="/images/logo.png"
-                  />
-                ).toBlob();
-
-                // Trigger download
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `invoice-${invoiceNumber}.pdf`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
+              onClick={handleGenerateInvoice}
             >
               <IndianRupee className="mr-2 h-4 w-4" />
               Generate Invoice
             </Button>
           </div>
         </div>
+
+        {/* Status Indicator */}
+        {items.length > 0 && (
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-blue-800">
+                  Invoice Status: {getInvoiceStatus()}
+                </h3>
+                <p className="text-sm text-blue-600">
+                  {advancePayment > 0
+                    ? "Advance payment received. Invoice will be marked as DRAFT."
+                    : "Full payment received. Invoice will be marked as PAID."}
+                </p>
+              </div>
+              <Badge
+                variant={advancePayment > 0 ? "secondary" : "default"}
+                className={
+                  advancePayment > 0
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-green-100 text-green-800"
+                }
+              >
+                {advancePayment > 0 ? "DRAFT" : "PAID"}
+              </Badge>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Form */}
@@ -477,48 +761,6 @@ const Invoices = () => {
               </CardContent>
             </Card>
 
-            {/* Shipping Information */}
-            <Card className="border-blue-100 shadow-sm">
-              <CardHeader className="bg-blue-50/50 pb-3">
-                <CardTitle className="text-[#954C2E] flex items-center gap-2">
-                  <div className="w-2 h-5 rounded-full bg-[#954C2E]"></div>
-                  Shipping Information
-                </CardTitle>
-                <CardDescription>
-                  Enter shipping details (if different from billing)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="shippingName" className="text-gray-700">
-                    Name
-                  </Label>
-                  <Input
-                    id="shippingName"
-                    name="name"
-                    value={shippingInfo.name}
-                    onChange={handleShippingInfoChange}
-                    placeholder="Shipping Name"
-                    className="border-gray-300 focus:border-blue-400"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="shippingAddress" className="text-gray-700">
-                    Shipping Address
-                  </Label>
-                  <Textarea
-                    id="shippingAddress"
-                    name="address"
-                    value={shippingInfo.address}
-                    onChange={handleShippingInfoChange}
-                    placeholder="Shipping Address"
-                    rows={3}
-                    className="border-gray-300 focus:border-blue-400"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Add Products */}
             <Card className="border-blue-100 shadow-sm">
               <CardHeader className="bg-blue-50/50 pb-3">
@@ -551,13 +793,21 @@ const Invoices = () => {
                             key={product.id}
                             onClick={() => {
                               setSelectedProduct(product);
-                              setSearchQuery(product.name);
+                              setSearchQuery("");
                             }}
-                            className="px-4 py-2 cursor-pointer hover:bg-blue-50 flex justify-between"
+                            className="px-4 py-2 cursor-pointer hover:bg-blue-50 flex justify-between items-center"
                           >
-                            <span>
-                              {product.name} {product.size}
-                            </span>
+                            <div>
+                              <span>
+                                {product.name} {product.size}
+                              </span>
+                              <span className="block text-xs text-gray-500">
+                                Stock:{" "}
+                                {productStock[product.id] !== undefined
+                                  ? productStock[product.id]
+                                  : "Loading..."}
+                              </span>
+                            </div>
                             <span className="text-blue-600">
                               ₹{product.price}
                             </span>
@@ -584,15 +834,40 @@ const Invoices = () => {
                       className="border-gray-300 focus:border-blue-400"
                     />
                   </div>
+
                   <div className="space-y-2">
                     <Label className="text-gray-700">Selected Product</Label>
                     <div className="p-2 border border-gray-300 rounded-md min-h-[40px] bg-gray-50">
                       {selectedProduct ? (
-                        <div className="flex justify-between items-center">
-                          <span>{selectedProduct.name}</span>
-                          <span className="text-blue-600 font-medium">
-                            ₹{selectedProduct.price}
-                          </span>
+                        <div>
+                          <div className="flex justify-between items-center">
+                            <span>{selectedProduct.name}</span>
+                            <span className="text-blue-600 font-medium">
+                              ₹
+                              {(
+                                selectedProduct.price * quantity
+                              ).toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
+                          {applyDiscount && discountPercentage > 0 && (
+                            <div className="flex justify-between text-sm mt-1">
+                              <span className="text-green-600">
+                                After {discountPercentage}% discount:
+                              </span>
+                              <span className="text-green-600 font-medium">
+                                ₹
+                                {calculateDiscountedPrice(
+                                  selectedProduct.price,
+                                  discountPercentage,
+                                  quantity
+                                ).toLocaleString("en-IN", {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-gray-400">
@@ -601,6 +876,49 @@ const Invoices = () => {
                       )}
                     </div>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="applyDiscount"
+                      checked={applyDiscount}
+                      onCheckedChange={(checked) =>
+                        setApplyDiscount(checked === true)
+                      }
+                      className="data-[state=checked]:bg-[#954C2E] text-white border-amber-600"
+                    />
+                    <Label
+                      htmlFor="applyDiscount"
+                      className="text-gray-700 cursor-pointer"
+                    >
+                      Apply Discount
+                    </Label>
+                  </div>
+
+                  {applyDiscount && (
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="discountPercentage"
+                        className="text-gray-700"
+                      >
+                        Discount Percentage (0-100%)
+                      </Label>
+                      <Input
+                        id="discountPercentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={discountPercentage}
+                        onChange={(e) => {
+                          let value = parseInt(e.target.value) || 0;
+                          if (value > 100) value = 100;
+                          if (value < 0) value = 0;
+                          setDiscountPercentage(value);
+                        }}
+                        className="border-gray-300 focus:border-blue-400"
+                      />
+                    </div>
+                  )}
                 </div>
                 <Button
                   onClick={() => {
@@ -613,7 +931,6 @@ const Invoices = () => {
                     }
                     handleAddItem();
                   }}
-                  // disabled={!selectedProduct}
                   className="w-full bg-[#954C2E] hover:bg-[#996600] text-white font-open-sans"
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -691,12 +1008,6 @@ const Invoices = () => {
                       Real-time invoice preview
                     </CardDescription>
                   </div>
-                  <Badge
-                    variant="secondary"
-                    className="bg-white text-[#954C2E] font-bold"
-                  >
-                    {invoiceNumber}
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -722,10 +1033,10 @@ const Invoices = () => {
 
                   <div className="flex justify-between items-center mt-4">
                     <div>
-                      <p className="text-sm text-gray-800">
+                      {/* <p className="text-sm text-gray-800">
                         <span className="font-bold">Invoice No:</span>{" "}
-                        {invoiceNumber}
-                      </p>
+                        {isLoadingInvoiceNumber ? "Loading..." : invoiceNumber}
+                      </p> */}
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-gray-800">
@@ -749,21 +1060,6 @@ const Invoices = () => {
                     </p>
                     <p className="text-sm text-gray-600">
                       {customerInfo.address || "Billing Address"}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#954C2E] mb-2">
-                      Ship To:
-                    </h3>
-                    <p className="text-sm text-gray-800 font-bold">
-                      {shippingInfo.name ||
-                        customerInfo.name ||
-                        "Shipping Name"}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {shippingInfo.address ||
-                        customerInfo.address ||
-                        "Shipping Address"}
                     </p>
                   </div>
                 </div>
@@ -805,19 +1101,40 @@ const Invoices = () => {
                               {item.name}
                             </td>
                             <td className="text-right py-3 text-gray-600 text-sm">
-                              {item.quantity}
+                              {item.quantity.toLocaleString("en-IN")}
                             </td>
                             <td className="text-right py-3 text-gray-600 text-sm">
-                              ₹{item.price.toFixed(2)}
+                              ₹
+                              {(item.price * item.quantity).toLocaleString(
+                                "en-IN",
+                                {
+                                  minimumFractionDigits: 2,
+                                }
+                              )}
                             </td>
                             <td className="text-right py-3 text-gray-600 text-sm">
-                              ₹{itemCgst.toFixed(2)}
+                              ₹
+                              {itemCgst.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                              })}
                             </td>
                             <td className="text-right py-3 text-gray-600 text-sm">
-                              ₹{itemSgst.toFixed(2)}
+                              ₹
+                              {itemSgst.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                              })}
                             </td>
                             <td className="text-right py-3 text-[#954C2E] font-semibold text-sm">
-                              ₹{itemTotal.toFixed(2)}
+                              ₹
+                              {/* {itemTotal.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                              })} */}
+                              {(item.price * item.quantity).toLocaleString(
+                                "en-IN",
+                                {
+                                  minimumFractionDigits: 2,
+                                }
+                              )}
                             </td>
                           </tr>
                         );
@@ -831,9 +1148,30 @@ const Invoices = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal:</span>
                     <span className="text-gray-800">
-                      ₹{subtotal.toFixed(2)}
+                      ₹
+                      {subtotal.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
+
+                  {items.some((item) => item.discount && item.discount > 0) && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Total Discounts:</span>
+                      <span>
+                        -₹
+                        {items
+                          .filter((item) => item.discount && item.discount > 0)
+                          .reduce(
+                            (sum, item) => sum + (item.discountedPrice || 0),
+                            0
+                          )
+                          .toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
+                      </span>
+                    </div>
+                  )}
 
                   {/* GST Options */}
                   <div className="flex items-center space-x-2 pt-2">
@@ -872,7 +1210,10 @@ const Invoices = () => {
                           GST Total:
                         </span>
                         <span className="text-gray-800 font-medium">
-                          ₹{gstTotal.toFixed(2)}
+                          ₹
+                          {subtotal.toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
                         </span>
                       </div>
                     </>
@@ -880,7 +1221,12 @@ const Invoices = () => {
 
                   <div className="flex justify-between font-bold text-lg pt-3 border-t border-blue-100">
                     <span className="text-[#954C2E]">Total:</span>
-                    <span className="text-[#954C2E]">₹{total.toFixed(2)}</span>
+                    <span className="text-[#954C2E]">
+                      ₹
+                      {subtotal.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
                   </div>
 
                   {/* Advance Payment */}
@@ -916,6 +1262,14 @@ const Invoices = () => {
                             ₹{advanceAmount.toFixed(2)}
                           </span>
                         </div>
+                        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                          <p className="text-xs text-amber-700">
+                            ⓘ Invoice will be marked as <strong>DRAFT</strong>
+                            since advance payment is received. Status will
+                            change to <strong>PAID</strong> when full payment is
+                            made.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -940,74 +1294,7 @@ const Invoices = () => {
               </Button>
               <Button
                 className="flex-1 bg-[#954C2E] hover:bg-[#734d26] text-white font-open-sans"
-                onClick={async () => {
-                  await saveInvoice("FINAL");
-                  const blob = await pdf(
-                    <InvoicePDF
-                      invoiceData={{
-                        companyDetails,
-                        invoiceNumber,
-                        invoiceDate,
-                        dueDate: invoiceDate,
-                        customerInfo: {
-                          name: customerInfo.name || "",
-                          address: customerInfo.address || "",
-                          city: customerInfo.city || "",
-                          pincode: customerInfo.pincode || "",
-                          gstin: customerInfo.gstin || "",
-                        },
-                        shippingInfo: shippingInfo.address
-                          ? {
-                              name: customerInfo.name,
-                              address: customerInfo.address,
-                              city: customerInfo.city ?? "",
-                              pincode: customerInfo.pincode ?? "",
-                              gstin: customerInfo.gstin ?? "",
-                            }
-                          : {
-                              name: customerInfo.name || "",
-                              address: customerInfo.address || "",
-                              city: customerInfo.city || "",
-                              pincode: customerInfo.pincode || "",
-                              gstin: customerInfo.gstin || "",
-                            },
-                        items: items.map((item) => ({
-                          name: item.name,
-                          hsn: "970300",
-                          quantity: item.quantity,
-                          unit: "pcs",
-                          rate: item.price,
-                          cgst: 6,
-                          sgst: 6,
-                          amount: item.total,
-                          discount: item.discount ?? 0,
-                        })),
-                        subtotal,
-                        cgst,
-                        sgst,
-                        total,
-                        totalInWords: `${convertToWords(total)} Only`,
-                        deliveryDate: new Date().toLocaleDateString("en-IN", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        }),
-                        advancePaid: advancePayment,
-                        notes: "",
-                        previousDue: 0,
-                      }}
-                      logoUrl="/images/logo.png"
-                    />
-                  ).toBlob();
-
-                  // Trigger download
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `invoice-${invoiceNumber}.pdf`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
+                onClick={handleGenerateInvoice}
               >
                 <IndianRupee className="mr-2 h-4 w-4" />
                 Generate Invoice

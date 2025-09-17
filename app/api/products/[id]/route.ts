@@ -9,7 +9,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params; // ✅ Await params
+    const { id } = await context.params;
     const product = await prisma.product.findUnique({
       where: { id: Number(id) },
     });
@@ -34,15 +34,19 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params; // ✅ Await params
+    const { id } = await context.params;
     const body = await req.json();
-    const { name, price, size, category } = body;
-
-    console.log(name, price, size, category);
+    const { name, price, size, category, quantity } = body;
 
     const updatedProduct = await prisma.product.update({
       where: { id: Number(id) },
-      data: { name, price, size, category },
+      data: {
+        name,
+        price,
+        size,
+        category,
+        quantity: quantity ? parseInt(quantity) : undefined,
+      },
     });
 
     return NextResponse.json(updatedProduct);
@@ -61,7 +65,7 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params; // ✅ Await params
+    const { id } = await context.params;
     await prisma.product.delete({
       where: { id: Number(id) },
     });
