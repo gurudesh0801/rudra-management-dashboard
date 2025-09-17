@@ -1,14 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const data = await req.json();
+    const params = await context.params;
+    const { id } = params;
 
     let updateData: any = {
       status: data.status,
@@ -29,7 +31,7 @@ export async function PUT(
     }
 
     const updatedInvoice = await prisma.invoice.update({
-      where: { id: Number(params.id) },
+      where: { id: Number(id) },
       data: updateData,
       include: { customer: true },
     });
