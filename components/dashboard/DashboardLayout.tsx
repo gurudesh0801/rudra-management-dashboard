@@ -112,11 +112,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         href: "/super-admin/inventory/inventory-management",
         icon: Package,
       },
-      {
-        name: "Expenses",
-        href: "/super-admin/expenses",
-        icon: CreditCard,
-      },
+      // {
+      //   name: "Expenses",
+      //   href: "/super-admin/expenses",
+      //   icon: CreditCard,
+      // },
       {
         name: "Billing & Invoices",
         href: "#", // Using href="#" for menu items with submenus
@@ -134,12 +134,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           },
         ],
       },
-      { name: "Users", href: "/super-admin/users", icon: Users },
-      {
-        name: "Resellers",
-        href: "/super-admin/resellers",
-        icon: BarChart,
-      },
+      // { name: "Users", href: "/super-admin/users", icon: Users },
+      // {
+      //   name: "Resellers",
+      //   href: "/super-admin/resellers",
+      //   icon: BarChart,
+      // },
     ],
     ADMIN: [
       {
