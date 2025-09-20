@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react";
 
 // Define user roles for better type safety
 type UserRole = "SUPER_ADMIN" | "ADMIN" | "USER";
@@ -32,13 +33,14 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   // Image paths with fallbacks
   const images = [
-    "/images/loginimg1.jpg",
-    "/images/loginimg2.jpg",
-    "/images/loginimg3.jpg",
+    "/images/loginimg1.JPG",
+    "/images/loginimg2.JPG",
+    "/images/loginimg3.JPG",
   ];
 
   // Auto change image every 7s
@@ -186,17 +188,32 @@ export default function LoginPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
+                      className="pr-10" // extra padding for icon
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      tabIndex={-1} // prevent tabbing to this button
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {error && (
